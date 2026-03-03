@@ -23,6 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import DATA_DIR, AI_ENABLED
 from auth import authenticate, test_connection
+from memory import MemoryManager
 from api_client import PeopleAPIClient
 from backup import create_backup, get_latest_backup, load_backup, list_backups
 from analyzer import analyze_all_contacts, summarize_analysis, format_contact_changes
@@ -226,12 +227,14 @@ def cmd_fix():
     print()
 
     # ── Process batches ───────────────────────────────────────────
+    mem = MemoryManager()
     process_batches(
         workplan=workplan,
         contacts_lookup=contacts_lookup,
         client=client,
         changelog=changelog,
         recovery=recovery,
+        memory=mem,
     )
 
 
@@ -505,6 +508,7 @@ def cmd_resume():
     recovery = RecoveryManager(session_id)
     recovery.checkpoint_data = checkpoint
 
+    mem = MemoryManager()
     process_batches(
         workplan=workplan,
         contacts_lookup=contacts_lookup,
@@ -512,6 +516,7 @@ def cmd_resume():
         changelog=changelog,
         recovery=recovery,
         start_from_batch=start_batch,
+        memory=mem,
     )
 
 

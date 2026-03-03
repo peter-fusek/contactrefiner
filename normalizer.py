@@ -28,7 +28,7 @@ from utils import (
 # NAME NORMALIZATION
 # ══════════════════════════════════════════════════════════════════════
 
-def fix_diacritics(name: str) -> tuple[str, float]:
+def fix_diacritics(name: str, memory=None) -> tuple[str, float]:
     """
     Fix missing diacritics in Slovak/Czech names.
 
@@ -38,6 +38,12 @@ def fix_diacritics(name: str) -> tuple[str, float]:
     """
     if not name:
         return name, 0.0
+
+    # Check memory first (learned preferences override dictionary)
+    if memory:
+        pref = memory.get_diacritics_preference(name)
+        if pref and pref != name:
+            return pref, 0.97
 
     # Check exact dictionary match (case-insensitive key lookup)
     # Build a lookup from stripped version

@@ -187,6 +187,7 @@ def process_batches(
     changelog: ChangeLog,
     recovery: RecoveryManager,
     start_from_batch: int = 1,
+    memory=None,
 ):
     """
     Process all batches interactively.
@@ -244,6 +245,13 @@ def process_batches(
                 "contacts": [r["resourceName"] for r in contacts_in_batch],
             })
             _save_rejected(rejected)
+
+            # Record rejections in memory
+            if memory:
+                for result in contacts_in_batch:
+                    for change in result.get("changes", []):
+                        memory.record_rejection(change)
+
             total_skipped += len(contacts_in_batch)
             total_processed += len(contacts_in_batch)
             recovery.save_checkpoint(batch_num, total_processed)
@@ -309,6 +317,11 @@ def process_batches(
                 batch_success += 1
                 print(f"   ✅ [{contact_idx}] {result['displayName']}")
 
+                # Record approvals in memory
+                if memory:
+                    for change in result["changes"]:
+                        memory.record_approval(change)
+
             except Exception as e:
                 batch_failed += 1
                 print(f"   ❌ [{contact_idx}] {result['displayName']}: {e}")
@@ -324,6 +337,11 @@ def process_batches(
 
     # All batches done
     recovery.mark_completed()
+
+    # Save memory with session summary
+    if memory:
+        memory.record_session(total_processed, total_success)
+        memory.save()
 
     print()
     print("═══════════════════════════════════════════")
