@@ -39,11 +39,14 @@ PERSON_FIELDS = ",".join([
 ])
 
 # Fields mask for update operations
+# NOTE: "memberships" intentionally excluded — group assignments must NEVER
+# be overwritten. The dynamic field mask in batch_processor only includes
+# fields with actual changes, so this is a safety net.
 UPDATE_PERSON_FIELDS = ",".join([
     "names", "emailAddresses", "phoneNumbers", "addresses",
     "organizations", "biographies", "birthdays", "events",
     "externalIds", "nicknames", "occupations", "relations",
-    "urls", "userDefined", "memberships",
+    "urls", "userDefined",
 ])
 
 PAGE_SIZE = 1000  # Max contacts per API page
