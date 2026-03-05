@@ -37,11 +37,18 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
     body = {}
     update_fields = set()
 
-    # Normalize singular → plural for People API field names
-    singular_to_plural = {
+    # Normalize AI-generated field names → People API field names
+    VALID_FIELDS = {
+        "names", "phoneNumbers", "emailAddresses", "addresses",
+        "organizations", "urls", "birthdays", "events", "userDefined",
+        "biographies", "nicknames",
+    }
+    field_aliases = {
         "name": "names",
         "phone": "phoneNumbers",
+        "phones": "phoneNumbers",
         "email": "emailAddresses",
+        "emails": "emailAddresses",
         "address": "addresses",
         "organization": "organizations",
         "url": "urls",
@@ -53,7 +60,9 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
     field_changes: dict[str, list[dict]] = {}
     for change in changes:
         top_field = change["field"].split("[")[0].split(".")[0]
-        top_field = singular_to_plural.get(top_field, top_field)
+        top_field = field_aliases.get(top_field, top_field)
+        if top_field not in VALID_FIELDS:
+            continue
         field_changes.setdefault(top_field, []).append(change)
 
     for top_field, changes_group in field_changes.items():
@@ -71,7 +80,7 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
             if not match:
                 continue
 
-            array_field = singular_to_plural.get(match.group(1), match.group(1))
+            array_field = field_aliases.get(match.group(1), match.group(1))
             index_str = match.group(2)
             sub_field = match.group(3)
 
