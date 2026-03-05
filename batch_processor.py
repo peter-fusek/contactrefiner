@@ -37,10 +37,23 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
     body = {}
     update_fields = set()
 
+    # Normalize singular → plural for People API field names
+    singular_to_plural = {
+        "name": "names",
+        "phone": "phoneNumbers",
+        "email": "emailAddresses",
+        "address": "addresses",
+        "organization": "organizations",
+        "url": "urls",
+        "birthday": "birthdays",
+        "event": "events",
+    }
+
     # Group changes by top-level field
     field_changes: dict[str, list[dict]] = {}
     for change in changes:
         top_field = change["field"].split("[")[0].split(".")[0]
+        top_field = singular_to_plural.get(top_field, top_field)
         field_changes.setdefault(top_field, []).append(change)
 
     for top_field, changes_group in field_changes.items():
@@ -58,7 +71,7 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
             if not match:
                 continue
 
-            array_field = match.group(1)
+            array_field = singular_to_plural.get(match.group(1), match.group(1))
             index_str = match.group(2)
             sub_field = match.group(3)
 
@@ -119,6 +132,10 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
                 if idx < len(current_data):
                     if sub_field:
                         current_data[idx][sub_field] = new_value
+                    elif array_field == "organizations":
+                        current_data[idx]["name"] = new_value
+                    elif array_field == "addresses":
+                        current_data[idx]["formattedValue"] = new_value
                     else:
                         current_data[idx]["value"] = new_value
 
