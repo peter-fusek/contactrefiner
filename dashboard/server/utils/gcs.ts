@@ -19,7 +19,8 @@ function getStorage(): Storage {
 
 function getBucket() {
   const config = useRuntimeConfig()
-  return getStorage().bucket(config.gcsBucket)
+  const bucket = String(config.gcsBucket)
+  return getStorage().bucket(bucket)
 }
 
 // In-memory cache with TTL
@@ -41,7 +42,8 @@ async function readJson<T>(path: string): Promise<T | null> {
   try {
     const [content] = await getBucket().file(path).download()
     return JSON.parse(content.toString('utf-8')) as T
-  } catch {
+  } catch (err) {
+    console.error(`[GCS] readJson(${path}) failed:`, (err as Error).message)
     return null
   }
 }
@@ -53,7 +55,8 @@ async function findLatestFile(prefix: string, extension: string): Promise<string
       .filter(f => f.name.endsWith(extension))
       .sort((a, b) => b.name.localeCompare(a.name))
     return matching[0]?.name ?? null
-  } catch {
+  } catch (err) {
+    console.error(`[GCS] findLatestFile(${prefix}) failed:`, (err as Error).message)
     return null
   }
 }
@@ -85,7 +88,8 @@ async function findAllFiles(prefix: string, extension: string): Promise<string[]
       .filter(f => f.name.endsWith(extension))
       .sort((a, b) => a.name.localeCompare(b.name))
       .map(f => f.name)
-  } catch {
+  } catch (err) {
+    console.error(`[GCS] findAllFiles(${prefix}) failed:`, (err as Error).message)
     return []
   }
 }
