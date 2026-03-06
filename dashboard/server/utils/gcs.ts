@@ -26,12 +26,14 @@ function getStorage(): Storage {
   if (raw) {
     try {
       const creds = typeof raw === 'string' ? JSON.parse(raw) : raw
-      // Ensure private_key has real newlines (env vars may have literal \n)
-      if (creds.private_key && !creds.private_key.includes('\n')) {
+      // Always normalize private_key newlines — env vars may have literal \n
+      if (creds.private_key) {
+        // Replace literal backslash-n with real newlines
         creds.private_key = creds.private_key.replace(/\\n/g, '\n')
       }
       storage = new Storage({ credentials: creds })
-      console.log('[GCS] Using credentials from env var - project:', creds.project_id)
+      console.log('[GCS] Using credentials from env var - project:', creds.project_id,
+        'pk_len:', creds.private_key?.length, 'has_newlines:', creds.private_key?.includes('\n'))
       return storage
     } catch (err) {
       console.error('[GCS] Failed to parse SA credentials:', (err as Error).message)
