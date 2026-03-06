@@ -87,6 +87,15 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
             index_str = match.group(2)
             sub_field = match.group(3)
 
+            # Remap invalid sub_field "value" for fields that don't use it
+            VALUE_REMAP = {
+                "addresses": "formattedValue",
+                "names": "givenName",
+                "organizations": "name",
+            }
+            if sub_field == "value" and array_field in VALUE_REMAP:
+                sub_field = VALUE_REMAP[array_field]
+
             if index_str == "+":
                 # Add new entry
                 extra = change.get("extra", {})
@@ -104,16 +113,19 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
                     new_entry = {"date": date_data}
                     current_data.append(new_entry)
                 elif array_field == "events":
-                    date_parts = new_value.split("-")
-                    new_entry = {
-                        "date": {
-                            "year": int(date_parts[0]),
-                            "month": int(date_parts[1]),
-                            "day": int(date_parts[2]),
-                        },
-                        "type": extra.get("type", "other"),
-                    }
-                    current_data.append(new_entry)
+                    try:
+                        date_parts = new_value.split("-")
+                        new_entry = {
+                            "date": {
+                                "year": int(date_parts[0]),
+                                "month": int(date_parts[1]),
+                                "day": int(date_parts[2]),
+                            },
+                            "type": extra.get("type", "other"),
+                        }
+                        current_data.append(new_entry)
+                    except (ValueError, IndexError):
+                        continue
                 elif array_field == "userDefined":
                     new_entry = {
                         "key": extra.get("key", ""),
@@ -122,6 +134,9 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
                     current_data.append(new_entry)
                 elif array_field == "organizations":
                     new_entry = {"name": new_value}
+                    current_data.append(new_entry)
+                elif array_field == "addresses":
+                    new_entry = {"formattedValue": new_value, "type": extra.get("type", "other")}
                     current_data.append(new_entry)
                 elif array_field == "names":
                     # Adding name fields to a new name entry
@@ -148,6 +163,8 @@ def build_update_body(person: dict, changes: list[dict]) -> dict:
                         current_data[idx]["name"] = new_value
                     elif array_field == "addresses":
                         current_data[idx]["formattedValue"] = new_value
+                    elif array_field == "names":
+                        current_data[idx]["givenName"] = new_value
                     else:
                         current_data[idx]["value"] = new_value
 
