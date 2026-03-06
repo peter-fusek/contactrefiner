@@ -9,21 +9,20 @@ export default defineNitroPlugin(() => {
     return
   }
 
-  const config = useRuntimeConfig()
-  const saKey = config.gcsServiceAccount
-
-  if (!saKey) {
+  // Read raw env var directly — Nuxt's useRuntimeConfig() auto-parses JSON
+  // which can corrupt private_key newlines
+  const raw = process.env.NUXT_GCS_SERVICE_ACCOUNT || process.env.GCS_SERVICE_ACCOUNT
+  if (!raw) {
     console.warn('[GCS] No GCS_SERVICE_ACCOUNT env var set')
     return
   }
 
   try {
-    // Nuxt may auto-parse JSON env vars into objects
-    const json = typeof saKey === 'object' ? JSON.stringify(saKey) : saKey as string
-    const parsed = typeof saKey === 'object' ? saKey : JSON.parse(saKey as string)
-    writeFileSync(KEY_PATH, json, { mode: 0o600 })
+    // Validate it's valid JSON before writing
+    const parsed = JSON.parse(raw)
+    writeFileSync(KEY_PATH, raw, { mode: 0o600 })
     process.env.GOOGLE_APPLICATION_CREDENTIALS = KEY_PATH
-    console.log('[GCS] Wrote SA key to', KEY_PATH, '- project:', (parsed as Record<string, string>).project_id)
+    console.log('[GCS] Wrote SA key to', KEY_PATH, '- project:', parsed.project_id)
   } catch (err) {
     console.error('[GCS] Failed to write SA key file:', (err as Error).message)
   }
