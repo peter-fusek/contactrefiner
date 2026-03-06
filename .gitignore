@@ -35,3 +35,9 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Dashboard (Nuxt)
+dashboard/node_modules/
+dashboard/.nuxt/
+dashboard/.output/
+dashboard/.data/
