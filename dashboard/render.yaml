@@ -14,3 +14,9 @@ services:
         sync: false
       - key: GCS_BUCKET
         value: contacts-refiner-data
+      - key: NUXT_SESSION_PASSWORD
+        sync: false
+      - key: NUXT_OAUTH_GOOGLE_CLIENT_ID
+        sync: false
+      - key: NUXT_OAUTH_GOOGLE_CLIENT_SECRET
+        sync: false

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const route = useRoute()
+const { user, clear: logout } = useUserSession()
 
 const navItems = [
   { label: 'Status', icon: 'i-lucide-activity', to: '/' },
@@ -48,9 +49,26 @@ function isActive(to: string) {
         </NuxtLink>
       </nav>
 
-      <!-- Footer -->
-      <div class="p-4 border-t border-neutral-800/50 text-xs text-neutral-600">
-        v{{ useRuntimeConfig().public.appVersion }}
+      <!-- User + Footer -->
+      <div class="p-3 border-t border-neutral-800/50 space-y-2">
+        <div v-if="user" class="flex items-center gap-2 px-1">
+          <img
+            v-if="user.picture"
+            :src="user.picture"
+            :alt="user.name"
+            class="size-6 rounded-full"
+          />
+          <span class="text-xs text-neutral-400 truncate flex-1">{{ user.name }}</span>
+          <button
+            class="text-xs text-neutral-600 hover:text-neutral-400 transition-colors"
+            @click="logout()"
+          >
+            <UIcon name="i-lucide-log-out" class="size-3.5" />
+          </button>
+        </div>
+        <div class="text-xs text-neutral-600 px-1">
+          v{{ useRuntimeConfig().public.appVersion }}
+        </div>
       </div>
     </aside>
 
