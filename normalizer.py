@@ -147,6 +147,154 @@ def split_name_fields(name_str: str) -> dict:
     return result
 
 
+_COMPANY_LEGAL_FORMS_RE = re.compile(
+    r'(s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|spol\.|k\.?\s*s\.?|gmbh|ltd|inc|corp|ag)\b',
+    re.IGNORECASE,
+)
+
+
+def _detect_company_in_name(person: dict) -> Optional[dict]:
+    """
+    Detect company/org name stuck in name fields and suggest fixes.
+
+    Common patterns:
+    A) familyName in parentheses with company: "(ČPS.a.s.)" — real surname in middleName
+    B) familyName is just a legal suffix: "S.r.o.)" — surname in displayName
+    C) familyName matches an org name: "Instarea" — surname in displayName
+
+    Returns dict with 'changes', 'given', 'family', 'middle' or None.
+    """
+    names = person.get("names", [])
+    if not names:
+        return None
+
+    n = names[0]
+    given = n.get("givenName", "")
+    family = n.get("familyName", "")
+    middle = n.get("middleName", "")
+    display = n.get("displayName", "")
+    orgs = person.get("organizations", [])
+    org_names = {o.get("name", "").strip("() ").lower() for o in orgs if o.get("name")}
+
+    changes = []
+
+    # ── Pattern A: familyName in parentheses ──────────────────────
+    parens_match = re.match(r'^\((.+)\)$', family.strip())
+    if parens_match:
+        parens_content = parens_match.group(1).strip()
+        is_company = (
+            parens_content.lower() in org_names
+            or _COMPANY_LEGAL_FORMS_RE.search(parens_content)
+        )
+        # If not clearly a company, check if it looks like a maiden name
+        # Maiden names: Slovak/Czech female surnames ending in -ová, -ova, -á
+        is_maiden_name = bool(re.search(
+            r'(?i)(ov[áa]|[áa]|ín[áa]|sk[áa])$', parens_content
+        ))
+        if not is_company and not is_maiden_name:
+            # Doesn't look like a surname — likely a company/affiliation
+            is_company = True
+        if is_company and middle:
+            # middleName is the real surname — move to familyName, keep middleName
+            changes.append({
+                "field": "names[0].familyName",
+                "old": family,
+                "new": middle,
+                "confidence": 0.90,
+                "reason": "priezvisko bolo v middleName, familyName obsahoval firmu (%s)" % parens_content,
+            })
+            # Add company to organizations if not already there
+            if parens_content.lower() not in org_names:
+                changes.append({
+                    "field": "organizations[+].name",
+                    "old": "",
+                    "new": parens_content,
+                    "confidence": 0.90,
+                    "reason": "firma z mena (%s) pridaná do organizácií" % parens_content,
+                })
+            return {"changes": changes, "given": given, "family": middle, "middle": middle}
+
+    # ── Pattern B: familyName is just a legal form suffix ─────────
+    # e.g. "S.r.o.)", "A.s.)" — the company name was split across fields
+    cleaned_family = family.strip()
+    stripped_family = re.sub(r'^[(\s]+|[)\s]+$', '', cleaned_family)
+    if stripped_family and re.fullmatch(
+        r'(?i)s\.?\s*r\.?\s*o\.?|a\.?\s*s\.?|spol\.?|k\.?\s*s\.?|gmbh|ltd\.?|inc\.?|corp\.?|ag\.?',
+        stripped_family,
+    ):
+        # Extract real surname from displayName
+        real_surname = _extract_surname_from_display(display, given)
+        if real_surname:
+            changes.append({
+                "field": "names[0].familyName",
+                "old": family,
+                "new": real_surname,
+                "confidence": 0.85,
+                "reason": "familyName obsahoval len právnu formu firmy, priezvisko z displayName",
+            })
+            # Extract full company name from displayName and add to orgs
+            company_name = _extract_company_from_display(display)
+            if company_name and company_name.lower() not in org_names:
+                changes.append({
+                    "field": "organizations[+].name",
+                    "old": "",
+                    "new": company_name,
+                    "confidence": 0.85,
+                    "reason": "firma z mena (%s) pridaná do organizácií" % company_name,
+                })
+            return {"changes": changes, "given": given, "family": real_surname, "middle": middle}
+
+    # ── Pattern C: familyName matches an org name ─────────────────
+    if family and family.strip().lower() in org_names:
+        # Check if displayName has a pipe/dash separator suggesting "Name | Company"
+        real_surname = _extract_surname_from_display(display, given)
+        if real_surname and real_surname.lower() != family.lower():
+            changes.append({
+                "field": "names[0].familyName",
+                "old": family,
+                "new": real_surname,
+                "confidence": 0.85,
+                "reason": "familyName obsahoval názov firmy (%s), priezvisko z displayName" % family,
+            })
+            return {"changes": changes, "given": given, "family": real_surname, "middle": middle}
+
+    return None
+
+
+def _extract_company_from_display(display: str) -> Optional[str]:
+    """Extract company name from displayName parentheses, e.g. 'Peter (Acme s.r.o.)' → 'Acme s.r.o.'"""
+    match = re.search(r'\(([^)]+)\)', display)
+    if match:
+        return match.group(1).strip()
+    return None
+
+
+def _extract_surname_from_display(display: str, given: str) -> Optional[str]:
+    """Extract the real surname from displayName, removing company parts."""
+    if not display:
+        return None
+
+    # Remove parenthesized parts: "Peter Marhoffer (ČPS.a.s.)" → "Peter Marhoffer"
+    cleaned = re.sub(r'\s*\(.*?\)', '', display).strip()
+    # Remove pipe-separated parts: "Jan Zelinka | Instarea" → "Jan Zelinka"
+    cleaned = re.split(r'\s*[|]\s*', cleaned)[0].strip()
+
+    # Remove the given name to get the surname
+    if given:
+        # Handle multi-word given names
+        for g in given.split():
+            cleaned = re.sub(r'(?i)^' + re.escape(g) + r'\s+', '', cleaned).strip()
+
+    # Remove any title prefixes
+    _, cleaned = extract_prefix(cleaned)
+
+    parts = cleaned.split()
+    if parts:
+        return parts[-1] if len(parts) == 1 else " ".join(parts)
+
+    return None
+
+
 def normalize_name(person: dict) -> list[dict]:
     """
     Analyze and suggest name normalizations for a contact.
@@ -161,9 +309,18 @@ def normalize_name(person: dict) -> list[dict]:
     name_data = names[0]
     given = name_data.get("givenName", "")
     family = name_data.get("familyName", "")
+    middle = name_data.get("middleName", "")
     display = name_data.get("displayName", "")
     prefix = name_data.get("honorificPrefix", "")
     suffix = name_data.get("honorificSuffix", "")
+
+    # ── Fix company name stuck in name fields ─────────────────────
+    company_fix = _detect_company_in_name(person)
+    if company_fix:
+        changes.extend(company_fix["changes"])
+        given = company_fix.get("given", given)
+        family = company_fix.get("family", family)
+        middle = company_fix.get("middle", middle)
 
     # ── If name is only in one field or display name ──────────────
     if not given and not family and display:
@@ -644,19 +801,19 @@ def normalize_organizations(person: dict) -> list[dict]:
                     "field": f"organizations[{i}].name",
                     "old": name,
                     "new": fixed,
-                    "confidence": 0.85,
+                    "confidence": 0.70,
                     "reason": "oprava veľkosti písmen (organizácia)",
                 })
 
         # Fix casing for title/position
         if title and (is_all_caps(title) or is_all_lower(title)):
-            fixed = title_case_sk(title)
+            fixed = _title_case_title(title)
             if fixed != title:
                 changes.append({
                     "field": f"organizations[{i}].title",
                     "old": title,
                     "new": fixed,
-                    "confidence": 0.85,
+                    "confidence": 0.70,
                     "reason": "oprava veľkosti písmen (pozícia)",
                 })
 
@@ -665,7 +822,7 @@ def normalize_organizations(person: dict) -> list[dict]:
 
 def _title_case_company(name: str) -> str:
     """
-    Title case for company names, preserving legal forms.
+    Title case for company names, preserving legal forms and acronyms.
     """
     # Legal form abbreviations to preserve
     legal_forms = {
@@ -677,15 +834,62 @@ def _title_case_company(name: str) -> str:
         "n.o.": "n.o.",
     }
 
-    result = title_case_sk(name)
+    # Known company/industry acronyms to keep uppercase
+    KNOWN_ACRONYMS = {
+        "IBM", "SAP", "HP", "GE", "ABB", "DHL", "BMW", "VW", "UPC",
+        "CSOB", "SLSP", "VUB", "OTP", "ING", "PPF", "ESET",
+        "IT", "EU", "SK", "CZ", "USA", "UK", "NATO", "FIFA",
+        "CEO", "CFO", "CTO", "COO", "CMO", "CIO",
+    }
+
+    words = name.split()
+    result_words = []
+    for i, word in enumerate(words):
+        # Strip non-alpha to check against acronyms
+        alpha = re.sub(r'[^a-zA-Z]', '', word)
+        if alpha.upper() in KNOWN_ACRONYMS:
+            # Preserve as uppercase, keep non-alpha chars in place
+            result_words.append(word.upper())
+        elif len(alpha) <= 2 and alpha.isalpha():
+            # Very short words (AG, SE, AB) — likely acronyms
+            result_words.append(word.upper())
+        else:
+            result_words.append(
+                word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
+            )
+
+    result = " ".join(result_words)
 
     # Restore legal form abbreviations
     lower_result = result.lower()
     for form_lower, form_proper in legal_forms.items():
         if form_lower in lower_result:
-            # Find and replace case-insensitively
             idx = lower_result.find(form_lower)
             if idx >= 0:
                 result = result[:idx] + form_proper + result[idx + len(form_lower):]
 
     return result
+
+
+# Common job title acronyms that should stay uppercase
+_JOB_TITLE_ACRONYMS = {
+    "CEO", "CFO", "CTO", "COO", "CMO", "CIO", "CSO", "CPO", "CDO", "CISO",
+    "VP", "SVP", "EVP", "AVP",
+    "HR", "IT", "PR", "QA", "PM", "BA",
+    "MBA", "CPA", "CFA",
+}
+
+
+def _title_case_title(title: str) -> str:
+    """Title case for job titles, preserving common acronyms."""
+    words = title.split()
+    result = []
+    for word in words:
+        alpha = re.sub(r'[^a-zA-Z]', '', word)
+        if alpha.upper() in _JOB_TITLE_ACRONYMS:
+            result.append(word.upper())
+        else:
+            result.append(
+                word[0].upper() + word[1:].lower() if len(word) > 1 else word.upper()
+            )
+    return " ".join(result)

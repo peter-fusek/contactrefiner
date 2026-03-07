@@ -384,7 +384,7 @@ def process_batches(
                     )
 
                 # Execute update
-                etag = result.get("etag") or get_etag(person)
+                etag = get_etag(person) or result.get("etag", "")
                 client.update_contact(
                     resource_name=resource_name,
                     etag=etag,

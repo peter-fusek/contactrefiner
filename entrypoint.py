@@ -118,20 +118,23 @@ def run():
     logger.info("Phase 2: AI review of MEDIUM changes")
     try:
         from main import cmd_ai_review
-        cmd_ai_review()
+        promoted_count = cmd_ai_review()
     except Exception as e:
         logger.error(f"AI review failed: {e}")
         traceback.print_exc()
         sys.exit(1)
 
-    # Apply promoted changes
-    logger.info("Phase 2: Auto-fix promoted changes")
-    try:
-        cmd_fix(auto_mode=True, confidence_threshold=0.90, dry_run=dry_run)
-    except Exception as e:
-        logger.error(f"Promoted fix failed: {e}")
-        traceback.print_exc()
-        sys.exit(1)
+    # Apply promoted changes only if AI actually promoted something
+    if promoted_count and promoted_count > 0:
+        logger.info(f"Phase 2: Auto-fix {promoted_count} promoted changes")
+        try:
+            cmd_fix(auto_mode=True, confidence_threshold=0.90, dry_run=dry_run)
+        except Exception as e:
+            logger.error(f"Promoted fix failed: {e}")
+            traceback.print_exc()
+            sys.exit(1)
+    else:
+        logger.info("Phase 2: No promoted changes, skipping fix")
 
     _log_elapsed(start)
 

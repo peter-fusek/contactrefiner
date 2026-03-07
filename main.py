@@ -282,8 +282,9 @@ def cmd_fix(auto_mode=False, confidence_threshold=0.90, dry_run=False):
         send_macos_notification("Contacts Refiner", msg)
 
 
-def cmd_ai_review(resume=False):
-    """AI review of MEDIUM confidence changes — checkpointed, resumable."""
+def cmd_ai_review(resume=False) -> int:
+    """AI review of MEDIUM confidence changes — checkpointed, resumable.
+    Returns the number of promoted (MEDIUM->HIGH) changes."""
     print("🤖 Google Contacts Cleanup — AI Review")
     print("=" * 50)
     print()
@@ -367,13 +368,13 @@ def cmd_ai_review(resume=False):
     if not medium_items:
         print("ℹ️  Žiadne MEDIUM zmeny na AI review.")
         _cleanup_ai_checkpoint()
-        return
+        return 0
 
     # Initialize AI
     ai = _get_ai_analyzer()
     if not ai:
         print("❌ AI nie je dostupné!")
-        return
+        return 0
 
     # Process in batches of AI_MAX_CONTACTS_PER_BATCH
     start_from = checkpoint.get("last_reviewed", 0)
@@ -469,6 +470,8 @@ def cmd_ai_review(resume=False):
     learnings = ai.get_new_learnings()
     if learnings:
         print(f"   Naučené vzory: {len(learnings)}")
+
+    return promoted
 
 
 def _cleanup_ai_checkpoint():
