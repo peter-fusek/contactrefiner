@@ -12,6 +12,6 @@ export default defineEventHandler((): ConfigResponse => {
     autoMaxChanges: 200,
     autoThreshold: 0.90,
     environment: 'cloud',
-    schedulerStatus: 'paused',
+    schedulerStatus: 'enabled',
   }
 })
