@@ -6,6 +6,7 @@ const navItems = [
   { label: 'Status', icon: 'i-lucide-activity', to: '/' },
   { label: 'Changelog', icon: 'i-lucide-file-diff', to: '/changelog' },
   { label: 'Analytics', icon: 'i-lucide-bar-chart-3', to: '/analytics' },
+  { label: 'Review', icon: 'i-lucide-check-circle', to: '/review' },
   { label: 'Config', icon: 'i-lucide-settings', to: '/config' },
 ]
 

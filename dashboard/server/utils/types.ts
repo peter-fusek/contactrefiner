@@ -113,6 +113,47 @@ export interface BatchMarker {
 
 export type ChangelogLine = ChangelogEntry | BatchMarker
 
+// --- Review ---
+
+export interface ReviewChange {
+  id: string // hash(resourceName + field + old + new)
+  resourceName: string
+  displayName: string
+  field: string
+  old: string
+  new: string
+  confidence: number
+  reason: string
+  ruleCategory: string
+  extra?: Record<string, unknown>
+}
+
+export interface ReviewDecision {
+  changeId: string
+  decision: 'approved' | 'rejected' | 'edited' | 'skipped'
+  editedValue?: string
+  decidedAt: string
+}
+
+export interface ReviewSession {
+  id: string
+  reviewFilePath: string
+  createdAt: string
+  decisions: Record<string, ReviewDecision> // changeId -> decision
+  stats: { total: number; approved: number; rejected: number; edited: number; skipped: number }
+}
+
+export interface FeedbackEntry {
+  timestamp: string
+  type: 'approval' | 'rejection' | 'edit'
+  ruleCategory: string
+  field: string
+  old: string
+  suggested: string
+  finalValue: string
+  confidence: number
+}
+
 // --- API Responses ---
 
 export interface StatusResponse {

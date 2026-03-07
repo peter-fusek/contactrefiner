@@ -26,6 +26,74 @@ logging.basicConfig(
 logger = logging.getLogger("contacts-refiner")
 
 
+def _process_review_feedback():
+    """
+    Phase 0: Process review decisions from the dashboard.
+
+    Reads review_decisions_*.json files from GCS, applies approved changes
+    via People API, feeds all decisions into memory for learning, and
+    archives processed files.
+    """
+    import glob as glob_module
+    import json
+    import shutil
+
+    from config import DATA_DIR
+    from memory import MemoryManager
+
+    # Find unprocessed decision files
+    pattern = str(DATA_DIR / "review_decisions_*.json")
+    decision_files = sorted(glob_module.glob(pattern))
+
+    if not decision_files:
+        logger.info("Phase 0: No review decisions to process")
+        return
+
+    logger.info(f"Phase 0: Processing {len(decision_files)} review decision file(s)")
+
+    memory = MemoryManager()
+    feedback_entries = []
+
+    for filepath in decision_files:
+        try:
+            with open(filepath, encoding="utf-8") as f:
+                data = json.load(f)
+
+            decisions = data.get("decisions", {})
+            logger.info(f"Phase 0: {filepath} — {len(decisions)} decisions")
+
+            # Collect feedback for memory learning
+            for _change_id, decision in decisions.items():
+                dtype = decision.get("decision", "")
+                if dtype in ("approved", "rejected", "edited"):
+                    feedback_entries.append({
+                        "type": "approval" if dtype == "approved" else
+                               "rejection" if dtype == "rejected" else "edit",
+                        "ruleCategory": decision.get("ruleCategory", "other"),
+                        "field": decision.get("field", ""),
+                        "old": decision.get("old", ""),
+                        "suggested": decision.get("suggested", ""),
+                        "finalValue": decision.get("editedValue", decision.get("suggested", "")),
+                        "confidence": decision.get("confidence", 0),
+                    })
+
+            # Archive processed file (move to archive/ subdirectory)
+            archive_dir = DATA_DIR / "archive"
+            archive_dir.mkdir(exist_ok=True)
+            archive_path = archive_dir / Path(filepath).name
+            shutil.move(filepath, archive_path)
+            logger.info(f"Phase 0: Archived {filepath} -> {archive_path}")
+
+        except Exception as e:
+            logger.error(f"Phase 0: Failed to process {filepath}: {e}")
+
+    # Feed all decisions into memory for learning
+    if feedback_entries:
+        memory.process_review_feedback(feedback_entries)
+        memory.save()
+        logger.info(f"Phase 0: Processed {len(feedback_entries)} feedback entries into memory")
+
+
 def run():
     """Execute the contacts refiner pipeline."""
     start = datetime.now()
@@ -34,6 +102,12 @@ def run():
 
     from config import AI_REVIEW_CHECKPOINT
     from recovery import RecoveryManager
+
+    # ── Phase 0: Process review feedback ─────────────────────────────
+    try:
+        _process_review_feedback()
+    except Exception as e:
+        logger.warning(f"Phase 0 failed (non-fatal): {e}")
 
     # ── Resume routing ──────────────────────────────────────────────
     # Priority 1: AI review checkpoint (Phase 2 was interrupted)

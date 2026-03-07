@@ -12,6 +12,35 @@ from enricher import enrich_contact
 from utils import get_display_name, get_resource_name
 from config import CONFIDENCE_HIGH, CONFIDENCE_MEDIUM
 
+# Lazy-loaded memory manager for confidence adjustment
+_memory = None
+
+
+def _get_memory():
+    global _memory
+    if _memory is None:
+        try:
+            from memory import MemoryManager
+            _memory = MemoryManager()
+        except Exception:
+            pass
+    return _memory
+
+
+def _adjust_confidence(changes: list[dict]) -> list[dict]:
+    """Adjust confidence scores based on user feedback history."""
+    memory = _get_memory()
+    if not memory:
+        return changes
+
+    for change in changes:
+        category = memory.extract_rule_category(change.get("reason", ""))
+        base = change["confidence"]
+        adjusted = memory.get_adjusted_confidence(category, base)
+        if adjusted != base:
+            change["confidence"] = adjusted
+    return changes
+
 
 def analyze_contact(person: dict, ai_analyzer=None) -> dict:
     """
@@ -57,6 +86,9 @@ def analyze_contact(person: dict, ai_analyzer=None) -> dict:
         c for c in changes
         if c.get("old") != c.get("new") and c.get("new") not in (None, "")
     ]
+
+    # Adjust confidence based on user feedback history
+    changes = _adjust_confidence(changes)
 
     # AI enhancement pass (if available and needed)
     if ai_analyzer and ai_analyzer.needs_ai_review(changes):

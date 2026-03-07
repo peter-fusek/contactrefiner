@@ -6,6 +6,7 @@ Manages two files:
 - memory.json — machine-learned patterns (gitignored)
 """
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -16,15 +17,37 @@ from config import APP_DIR, DATA_DIR
 INSTRUCTIONS_PATH = APP_DIR / "instructions.md"  # Ships with code, not data
 MEMORY_PATH = DATA_DIR / "memory.json"            # Persisted data (GCS in cloud)
 
+# Rule category extraction from reason strings
+RULE_CATEGORIES = {
+    "diacritics": r"diakritik",
+    "title_case": r"veľkosti písmen|Title Case",
+    "phone_format": r"tel\. čísla|normalizácia tel",
+    "phone_type": r"typu tel",
+    "phone_duplicate": r"duplicitné tel",
+    "email_normalize": r"normalizácia email",
+    "email_invalid": r"nevalidný.*email",
+    "email_duplicate": r"duplicitný email",
+    "address_zip": r"PSČ",
+    "address_country": r"krajin",
+    "address_parse": r"parsovanie adres",
+    "org_case": r"organizáci",
+    "name_extract": r"extrakcia.*mena|extrakcia.*Name",
+    "name_split": r"rozdelenie",
+    "name_title": r"extrakcia titul",
+    "company_in_name": r"firma.*men|firmu",
+    "family_name_fix": r"priezvisko",
+}
+
 # Default empty memory structure
 _DEFAULT_MEMORY = {
-    "version": "1.0",
+    "version": "1.1",
     "last_updated": None,
     "diacritics_corrections": {},
     "merge_decisions": {},
     "enrichment_patterns": {"domain_to_org": {}},
     "rejected_changes": [],
     "session_history": [],
+    "rule_stats": {},
 }
 
 
@@ -157,6 +180,93 @@ class MemoryManager:
                     domain_map = patterns.setdefault("domain_to_org", {})
                     domain_map[domain] = org
                     self._dirty = True
+
+    def extract_rule_category(self, reason: str) -> str:
+        """Extract rule category from a reason string."""
+        for category, pattern in RULE_CATEGORIES.items():
+            if re.search(pattern, reason, re.IGNORECASE):
+                return category
+        return "other"
+
+    def process_review_feedback(self, decisions: list[dict]):
+        """
+        Process review decisions from the dashboard.
+
+        Each decision dict should have:
+          - type: 'approval' | 'rejection' | 'edit'
+          - ruleCategory: str
+          - field: str
+          - old: str
+          - suggested: str
+          - finalValue: str
+          - confidence: float
+        """
+        rule_stats = self.memory.setdefault("rule_stats", {})
+
+        for d in decisions:
+            category = d.get("ruleCategory", "other")
+            stats = rule_stats.setdefault(category, {
+                "approved": 0, "rejected": 0, "edited": 0,
+            })
+
+            dtype = d.get("type", "")
+            if dtype == "approval":
+                stats["approved"] = stats.get("approved", 0) + 1
+                # Also record as a standard approval for diacritics tracking
+                self.record_approval({
+                    "field": d.get("field", ""),
+                    "old": d.get("old", ""),
+                    "new": d.get("finalValue", d.get("suggested", "")),
+                    "reason": d.get("ruleCategory", ""),
+                })
+            elif dtype == "rejection":
+                stats["rejected"] = stats.get("rejected", 0) + 1
+                self.record_rejection({
+                    "field": d.get("field", ""),
+                    "old": d.get("old", ""),
+                    "new": d.get("suggested", ""),
+                    "reason": d.get("ruleCategory", ""),
+                })
+            elif dtype == "edit":
+                stats["edited"] = stats.get("edited", 0) + 1
+
+            # Recalculate adjusted confidence
+            total = stats.get("approved", 0) + stats.get("rejected", 0) + stats.get("edited", 0)
+            if total >= 5:
+                approved = stats.get("approved", 0) + stats.get("edited", 0)
+                approval_rate = approved / total
+                # Bayesian smoothing: prior weight of 10 at base confidence 0.75
+                base = 0.75
+                adjusted = (base * 10 + approval_rate * total) / (10 + total)
+                stats["adjusted_confidence"] = max(0.30, min(0.98, round(adjusted, 3)))
+
+        self._dirty = True
+
+    def get_adjusted_confidence(self, rule_category: str, base_confidence: float) -> float:
+        """
+        Get confidence adjusted by user feedback history.
+
+        Uses Bayesian smoothing: if enough feedback exists (>=5 decisions),
+        blend the base confidence with the observed approval rate.
+        """
+        rule_stats = self.memory.get("rule_stats", {})
+        stats = rule_stats.get(rule_category)
+        if not stats:
+            return base_confidence
+
+        total = stats.get("approved", 0) + stats.get("rejected", 0) + stats.get("edited", 0)
+        if total < 5:
+            return base_confidence
+
+        adjusted = stats.get("adjusted_confidence")
+        if adjusted is not None:
+            return adjusted
+
+        # Fallback calculation
+        approved = stats.get("approved", 0) + stats.get("edited", 0)
+        approval_rate = approved / total
+        blended = (base_confidence * 10 + approval_rate * total) / (10 + total)
+        return max(0.30, min(0.98, blended))
 
     def record_session(self, contacts_processed: int, changes_applied: int):
         """Record session summary in history."""

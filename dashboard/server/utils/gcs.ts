@@ -6,6 +6,8 @@ import type {
   ChangelogEntry,
   ChangelogLine,
   BatchMarker,
+  ReviewSession,
+  FeedbackEntry,
 } from './types'
 
 let storage: Storage | null = null
@@ -160,4 +162,68 @@ export async function getChangelogWithMarkers(): Promise<ChangelogLine[]> {
 
 export function isBatchMarker(entry: ChangelogLine): entry is BatchMarker {
   return 'type' in entry
+}
+
+// --- Write API ---
+
+async function writeJson(path: string, data: unknown): Promise<void> {
+  const content = JSON.stringify(data, null, 2)
+  await getBucket().file(path).save(content, {
+    contentType: 'application/json',
+    resumable: false,
+  })
+}
+
+async function appendJsonl(path: string, entries: unknown[]): Promise<void> {
+  const lines = entries.map(e => JSON.stringify(e)).join('\n') + '\n'
+
+  const file = getBucket().file(path)
+  let existing = ''
+  try {
+    const [content] = await file.download()
+    existing = content.toString('utf-8')
+  } catch {
+    // File doesn't exist yet
+  }
+
+  await file.save(existing + lines, {
+    contentType: 'application/x-ndjson',
+    resumable: false,
+  })
+}
+
+// --- Review API ---
+
+export async function getLatestReviewFile(): Promise<{ path: string; data: unknown } | null> {
+  const path = await findLatestFile('data/review_', '.json')
+  if (!path) return null
+  const data = await readJson(path)
+  return data ? { path, data } : null
+}
+
+export async function getReviewSession(sessionId: string): Promise<ReviewSession | null> {
+  return readJson<ReviewSession>(`data/review_sessions/${sessionId}.json`)
+}
+
+export async function saveReviewSession(session: ReviewSession): Promise<void> {
+  await writeJson(`data/review_sessions/${session.id}.json`, session)
+}
+
+export async function getLatestReviewSession(): Promise<ReviewSession | null> {
+  const path = await findLatestFile('data/review_sessions/', '.json')
+  if (!path) return null
+  return readJson<ReviewSession>(path)
+}
+
+export async function saveReviewDecisions(sessionId: string, decisions: Record<string, unknown>): Promise<void> {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+  await writeJson(`data/review_decisions_${timestamp}.json`, {
+    sessionId,
+    exportedAt: new Date().toISOString(),
+    decisions,
+  })
+}
+
+export async function appendFeedback(entries: FeedbackEntry[]): Promise<void> {
+  await appendJsonl('data/feedback.jsonl', entries)
 }
