@@ -144,13 +144,15 @@ def _apply_review_changes(changes_by_contact: dict[str, list[dict]]):
             etag = get_etag(person)
 
             # Build update payload
-            update_body = build_update_body(person, changes)
-            if not update_body:
+            result = build_update_body(person, changes)
+            if not result:
                 logger.warning(f"Phase 0: No valid update body for {resource_name}")
                 continue
 
+            update_body, update_fields = result
+
             # Apply update
-            client.update_contact(resource_name, etag, update_body)
+            client.update_contact(resource_name, etag, update_body, update_fields)
 
             # Log each change
             for change in changes:
