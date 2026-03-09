@@ -40,6 +40,11 @@ def enrich_from_notes(person: dict) -> list[dict]:
     if not note_text:
         return changes
 
+    # Strip interaction note block — it contains dates that are not personal events
+    interaction_marker = "── Last Interaction"
+    if interaction_marker in note_text:
+        note_text = note_text[:note_text.index(interaction_marker)].rstrip()
+
     # Existing data for dedup
     existing_phones = {
         re.sub(r'\D', '', p.get("value", ""))

@@ -36,6 +36,10 @@ RULE_CATEGORIES = {
     "name_title": r"extrakcia titul",
     "company_in_name": r"firma.*men|firmu",
     "family_name_fix": r"priezvisko",
+    "x500_dn": r"X\.500 DN",
+    "org_from_email": r"odhadnutá z email",
+    "domain_case": r"domain|domén|doména",
+    "event_from_note": r"udalosť z poznámky|dátum.*poznámky",
 }
 
 # Default empty memory structure

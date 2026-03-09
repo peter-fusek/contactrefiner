@@ -23,6 +23,9 @@ const RULE_PATTERNS: [string, RegExp][] = [
   ['x500_dn', /X\.500 DN/i],
   ['org_from_email', /odhadnutá z email/i],
   ['country_from_zip', /krajiny z PSČ|kódu krajiny/i],
+  ['phone_type', /typu tel/i],
+  ['domain_case', /domain|domén|doména/i],
+  ['event_from_note', /udalosť z poznámky|dátum.*poznámky/i],
 ]
 
 export function extractRuleCategory(reason: string): string {

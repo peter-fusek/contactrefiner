@@ -3,6 +3,7 @@ Helper/utility functions used across modules.
 """
 import re
 import unicodedata
+from datetime import datetime
 from typing import Optional
 from unidecode import unidecode
 
@@ -141,7 +142,8 @@ def extract_dates_from_text(text: str) -> list[dict]:
                 else:
                     continue
 
-                if 1 <= m <= 12 and 1 <= d <= 31 and 1900 <= y <= 2100:
+                current_year = datetime.now().year
+                if 1 <= m <= 12 and 1 <= d <= 31 and 1900 <= y <= current_year:
                     parsed = f"{y:04d}-{m:02d}-{d:02d}"
 
                     # Try to detect context (birthday, nameday, etc.)
