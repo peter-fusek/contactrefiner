@@ -33,6 +33,23 @@ logger = logging.getLogger("contacts-refiner.activity")
 
 INTERACTION_NOTE_MARKER = "── Last Interaction"
 
+# Mass event filtering — events with many attendees or matching these patterns
+# are group/broadcast interactions, not personal contact
+MAX_EVENT_ATTENDEES = 10  # Calendar events with more attendees are skipped
+MASS_EVENT_PATTERNS = [
+    r"alumni\b",
+    r"svb\s+d[aá]telink",
+    r"za\s+slu[šs]n[ée]\s+slovensko",
+    r"predviano[čc]n[áa]\s+kapustnica",
+    r"v[iy]ano[čc]n[ée]\s+trhy",
+    r"\bdonaha\b",
+    r"\bnexteria?\b",
+    r"pisomn[ée]\s+hlasovani[ea]",
+    r"husac[íi]na\b",
+    r"stretavka\s+z\s+VS",
+]
+_MASS_EVENT_RE = re.compile("|".join(MASS_EVENT_PATTERNS), re.IGNORECASE)
+
 
 class InteractionScanner:
     """
@@ -100,10 +117,33 @@ class InteractionScanner:
                     if isinstance(val, str):
                         raw[key] = {"last_email": {"date": val, "subject": "", "snippet": ""}}
 
+                # Invalidate cached entries that match mass event patterns
+                invalidated = 0
+                for email_key, val in list(raw.items()):
+                    if not isinstance(val, dict):
+                        continue
+                    dirty = False
+                    le = val.get("last_email", {})
+                    lm = val.get("last_meeting", {})
+                    if le and le.get("subject") and _MASS_EVENT_RE.search(le["subject"]):
+                        val.pop("last_email", None)
+                        dirty = True
+                    if lm and lm.get("title") and _MASS_EVENT_RE.search(lm["title"]):
+                        val.pop("last_meeting", None)
+                        dirty = True
+                    if dirty:
+                        invalidated += 1
+                        # Also clear last_noted so notes get refreshed
+                        for rn in self._email_to_contacts.get(email_key, set()):
+                            data.get("last_noted", {}).pop(rn, None)
+
                 self._interactions = raw
                 self._last_noted = data.get("last_noted", {})
                 self._cache_loaded = True
-                logger.info(f"Cache loaded: {len(self._interactions)} email interactions")
+                logger.info(
+                    f"Cache loaded: {len(self._interactions)} email interactions"
+                    + (f" ({invalidated} mass events invalidated)" if invalidated else "")
+                )
             except (json.JSONDecodeError, OSError) as e:
                 logger.warning(f"Failed to load cache: {e}")
                 self._interactions = {}
@@ -124,6 +164,11 @@ class InteractionScanner:
     def _should_rescan(self, email: str) -> bool:
         """Check if an email needs rescanning based on cache age."""
         if email not in self._interactions:
+            return True
+
+        # Force rescan if last_email was invalidated (mass event removed)
+        data = self._interactions.get(email, {})
+        if isinstance(data, dict) and not data.get("last_email"):
             return True
 
         if not INTERACTIONS_CACHE.exists():
@@ -196,8 +241,9 @@ class InteractionScanner:
 
     def _get_latest_gmail_info(self, service, email: str) -> Optional[dict]:
         """
-        Get date, subject, and snippet of the most recent email to/from an address.
+        Get date, subject, and snippet of the most recent personal email to/from an address.
 
+        Skips mass/group emails (alumni events, broadcast messages, etc.).
         Returns {date, subject, snippet} or None.
         """
         query = f"from:{email} OR to:{email}"
@@ -206,40 +252,54 @@ class InteractionScanner:
         result = service.users().messages().list(
             userId="me",
             q=query,
-            maxResults=1,
+            maxResults=5,  # Fetch a few in case top ones are mass events
         ).execute()
 
         messages = result.get("messages", [])
         if not messages:
             return None
 
-        msg_id = messages[0]["id"]
-        self._gmail_limiter.wait()
-        msg = service.users().messages().get(
-            userId="me",
-            id=msg_id,
-            format="metadata",
-            metadataHeaders=["Subject"],
-        ).execute()
+        # Check up to 5 messages, skip mass events
+        for msg_entry in messages:
+            msg_id = msg_entry["id"]
+            self._gmail_limiter.wait()
+            msg = service.users().messages().get(
+                userId="me",
+                id=msg_id,
+                format="metadata",
+                metadataHeaders=["Subject", "To", "Cc"],
+            ).execute()
 
-        internal_date = msg.get("internalDate")
-        if not internal_date:
-            return None
+            internal_date = msg.get("internalDate")
+            if not internal_date:
+                continue
 
-        dt = datetime.fromtimestamp(int(internal_date) / 1000, tz=timezone.utc)
+            # Extract headers
+            subject = ""
+            recipient_count = 0
+            for header in msg.get("payload", {}).get("headers", []):
+                name = header.get("name", "").lower()
+                value = header.get("value", "")
+                if name == "subject":
+                    subject = value
+                elif name in ("to", "cc"):
+                    # Count recipients (rough estimate by counting @ signs)
+                    recipient_count += value.count("@")
 
-        # Extract subject from headers
-        subject = ""
-        for header in msg.get("payload", {}).get("headers", []):
-            if header.get("name", "").lower() == "subject":
-                subject = header.get("value", "")
-                break
+            # Skip mass emails
+            if _MASS_EVENT_RE.search(subject):
+                continue
+            if recipient_count > MAX_EVENT_ATTENDEES:
+                continue
 
-        return {
-            "date": dt.strftime("%Y-%m-%d"),
-            "subject": subject[:200],  # Truncate long subjects
-            "snippet": (msg.get("snippet") or "")[:300],
-        }
+            dt = datetime.fromtimestamp(int(internal_date) / 1000, tz=timezone.utc)
+            return {
+                "date": dt.strftime("%Y-%m-%d"),
+                "subject": subject[:200],
+                "snippet": (msg.get("snippet") or "")[:300],
+            }
+
+        return None
 
     # ── Calendar Scanning ───────────────────────────────────────────────
 
@@ -282,8 +342,14 @@ class InteractionScanner:
                     continue
 
                 event_title = (event.get("summary") or "")[:200]
-
                 attendees = event.get("attendees", [])
+
+                # Skip mass events (too many attendees or matching pattern)
+                if len(attendees) > MAX_EVENT_ATTENDEES:
+                    continue
+                if _MASS_EVENT_RE.search(event_title):
+                    continue
+
                 for attendee in attendees:
                     email = attendee.get("email", "").strip().lower()
                     if not email or email == account_email.lower():
