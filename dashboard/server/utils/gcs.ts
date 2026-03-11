@@ -151,7 +151,16 @@ async function readAllChangelogs(): Promise<ChangelogLine[]> {
 export async function getChangelog(): Promise<ChangelogEntry[]> {
   return cachedRead('changelog', async () => {
     const all = await readAllChangelogs()
-    return all.filter((e): e is ChangelogEntry => !('type' in e))
+    const entries = all.filter((e): e is ChangelogEntry => !('type' in e))
+
+    // Deduplicate: same (resourceName, field, old, new) keeps only the first occurrence
+    const seen = new Set<string>()
+    return entries.filter((e) => {
+      const key = `${e.resourceName}|${e.field}|${e.old}|${e.new}`
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
   })
 }
 
