@@ -184,7 +184,7 @@ class AIAnalyzer:
             if conf < AI_CONFIDENCE_REVIEW_THRESHOLD:
                 return True
             # Has diacritics changes that are pattern-based (not dictionary)
-            if "diakritik" in change.get("reason", "").lower() and conf < 0.90:
+            if "diacritics" in change.get("reason", "").lower() and conf < 0.90:
                 return True
 
         return False

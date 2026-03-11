@@ -18,7 +18,7 @@ function getStorage(): Storage {
   // Try GOOGLE_APPLICATION_CREDENTIALS first (local dev with key file)
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
     storage = new Storage()
-    console.log('[GCS] Using GOOGLE_APPLICATION_CREDENTIALS:', process.env.GOOGLE_APPLICATION_CREDENTIALS)
+    console.log('[GCS] Using file-based credentials')
     return storage
   }
 

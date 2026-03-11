@@ -81,7 +81,7 @@ def create_backup(client: PeopleAPIClient) -> Path:
     # ── Verify backup ─────────────────────────────────────────────
     print("   Verifying backup integrity...")
     if verify_backup(backup_path, len(contacts)):
-        print("   ✅ Integrita OK")
+        print("   ✅ Integrity OK")
     else:
         print("   ❌ Integrity ERROR! Backup may be corrupted!")
         sys.exit(1)
@@ -190,5 +190,5 @@ def restore_contact_from_backup(client: PeopleAPIClient, backup_data: dict, reso
         return True
 
     except Exception as e:
-        print(f"   ❌ Chyba pri obnove {resource_name}: {e}")
+        print(f"   ❌ Error restoring {resource_name}: {e}")
         return False

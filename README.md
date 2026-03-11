@@ -2,7 +2,6 @@
 
 Automated Google Contacts cleaner — SK/CZ diacritics, phone normalization, deduplication, AI-powered analysis (Claude), headless scheduling. Runs locally or as a Cloud Run Job.
 
-Automatizovaný nástroj na čistenie a opravu Google Kontaktov s dôrazom na slovenské a české mená, diakritiku, telefónne čísla a detekciu duplikátov.
 
 ## Features
 

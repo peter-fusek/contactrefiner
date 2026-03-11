@@ -19,27 +19,27 @@ MEMORY_PATH = DATA_DIR / "memory.json"            # Persisted data (GCS in cloud
 
 # Rule category extraction from reason strings
 RULE_CATEGORIES = {
-    "diacritics": r"diakritik|diacritics",
-    "title_case": r"veľkosti písmen|Title Case|letter casing",
-    "phone_format": r"tel\. čísla|normalizácia tel|phone.*normalization|international format",
-    "phone_type": r"typu tel|phone.*type",
-    "phone_duplicate": r"duplicitné tel|duplicate phone",
-    "email_normalize": r"normalizácia email|email.*normalization",
-    "email_invalid": r"nevalidný.*email|invalid.*email",
-    "email_duplicate": r"duplicitný email|duplicate email",
-    "address_zip": r"PSČ|postal code",
-    "address_country": r"krajin|country",
-    "address_parse": r"parsovanie adres|address.*pars",
-    "org_case": r"organizáci|organization",
-    "name_extract": r"extrakcia.*mena|extrakcia.*Name|name.*extract|inferred.*name",
-    "name_split": r"rozdelenie|name.*split",
-    "name_title": r"extrakcia titul|title.*extract",
-    "company_in_name": r"firma.*men|firmu|company.*name|strip.*company",
-    "family_name_fix": r"priezvisko|family.*name",
+    "diacritics": r"diacritics",
+    "title_case": r"letter casing|Title Case",
+    "phone_format": r"phone.*normalization|international format",
+    "phone_type": r"phone.*type",
+    "phone_duplicate": r"duplicate phone",
+    "email_normalize": r"email.*normalization|email.*lowercase",
+    "email_invalid": r"invalid.*email",
+    "email_duplicate": r"duplicate email",
+    "address_zip": r"postal code",
+    "address_country": r"country",
+    "address_parse": r"address.*pars",
+    "org_case": r"organization",
+    "name_extract": r"name.*extract|inferred.*name",
+    "name_split": r"name.*split|split.*name",
+    "name_title": r"title.*extract|prefix.*extract",
+    "company_in_name": r"company.*name|company_in_name",
+    "family_name_fix": r"family.*name|familyName",
     "x500_dn": r"X\.500 DN",
-    "org_from_email": r"odhadnutá z email|inferred from email|organization.*email",
-    "domain_case": r"domain|domén|doména",
-    "event_from_note": r"udalosť z poznámky|dátum.*poznámky|from notes|extracted from notes",
+    "org_from_email": r"inferred from email|organization.*email",
+    "domain_case": r"domain",
+    "event_from_note": r"from notes|extracted from notes",
     "owner_email": r"owner email",
     "corporate_url": r"corporate.*(?:LinkedIn|website|directory|social media)",
     "shared_address": r"shared HQ|shared.*office.*address",
@@ -131,14 +131,14 @@ class MemoryManager:
         reason = change.get("reason", "")
 
         # Track diacritics approvals
-        if "diakritik" in reason.lower() or "diacritics" in reason.lower():
+        if "diacritics" in reason.lower():
             old_val = change.get("old", "")
             new_val = change.get("new", "")
             if old_val and new_val and old_val != new_val:
                 self._record_diacritics(old_val, new_val, approved=True)
 
         # Track domain-to-org mappings from enrichment
-        if "organizáci" in reason.lower() or "organization" in reason.lower() or "email" in reason.lower():
+        if "organization" in reason.lower() or "email" in reason.lower():
             extra = change.get("extra", {})
             if extra.get("domain") and change.get("new"):
                 patterns = self.memory.setdefault("enrichment_patterns", {})
@@ -152,7 +152,7 @@ class MemoryManager:
         reason = change.get("reason", "")
 
         # Track diacritics rejections
-        if "diakritik" in reason.lower() or "diacritics" in reason.lower():
+        if "diacritics" in reason.lower():
             old_val = change.get("old", "")
             new_val = change.get("new", "")
             if old_val and new_val:

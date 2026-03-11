@@ -1,40 +1,40 @@
-# Pravidlá pre Google Contacts Refiner
+# Rules for Google Contacts Refiner
 
-## Diakritika
-- Preferuj slovenské tvary mien (Štefan, nie Stefan)
-- Mená bez slovenského/českého ekvivalentu ponechaj (Daniel, Michael, David)
-- Pri neistote radšej ponechaj pôvodný tvar
+## Diacritics
+- Prefer Slovak name forms (Štefan, not Stefan)
+- Keep names without a Slovak/Czech equivalent as-is (Daniel, Michael, David)
+- When uncertain, prefer keeping the original form
 
-## Zlučovanie duplikátov
-- Nikdy nezlučovať kontakty s rôznymi organizáciami
-- Pri rovnakom mene + telefóne → zlúčiť
-- Pri rovnakom mene + emaile → zlúčiť
-- Výnimky: kontakty označené ako rôzne osoby v poznámkach
+## Duplicate Merging
+- Never merge contacts with different organizations
+- Same name + phone number → merge
+- Same name + email → merge
+- Exceptions: contacts marked as different people in notes
 
-## Obohatenie
-- Z poznámok extrahuj IČO, DIČ, IČ DPH
-- Firemné emaily (nie Gmail/Seznam) → pridaj organizáciu
-- Neprepisuj existujúce hodnoty, len dopĺňaj chýbajúce
+## Enrichment
+- Extract IČO, DIČ, IČ DPH from notes
+- Company emails (not Gmail/Seznam) → add organization
+- Never overwrite existing values, only fill in missing ones
 
-## Telefónne čísla
-- Formát: medzinárodný (+421 xxx xxx xxx)
-- Slovenské čísla: +421
-- České čísla: +420
+## Phone Numbers
+- Format: international (+421 xxx xxx xxx)
+- Slovak numbers: +421
+- Czech numbers: +420
 
-## Mazanie
-- NIKDY nemazať kontakty natrvalo — vždy len presunúť do koša (trash)
-- Používateľ chce 30 dní na kontrolu pred trvalým odstránením
-- Platí pre kontakty, duplikáty, aj všetky ostatné operácie
+## Deletion
+- NEVER permanently delete contacts — always move to trash
+- User wants 30 days to review before permanent removal
+- Applies to contacts, duplicates, and all other operations
 
-## Labels / Skupiny kontaktov
-- Používateľ aktívne používa labels/skupiny (napr. SPSE, rodina)
-- NIKDY neodstraňovať kontakty z existujúcich skupín
-- NIKDY nemazať skupiny
-- Pri úpravách kontaktu zachovať všetky existujúce členstvá v skupinách
-- Učiť sa vzory labelovania: ak label obsahuje kontakty z rovnakej školy/firmy/rodiny, navrhnúť pridanie podobných kontaktov
-- Možné pridávať kontakty do existujúcich kategórií aj vytvárať nové zmysluplné skupiny
-- Nové skupiny vytvárať len s istotou >= 80% a pri >= 3 kontaktoch
+## Labels / Contact Groups
+- User actively uses labels/groups (e.g. SPSE, family)
+- NEVER remove contacts from existing groups
+- NEVER delete groups
+- When editing a contact, preserve all existing group memberships
+- Learn labeling patterns: if a label contains contacts from the same school/company/family, suggest adding similar contacts
+- Can add contacts to existing categories and create new meaningful groups
+- Create new groups only with >= 80% confidence and >= 3 contacts
 
-## Automatický režim
-- Minimálna istota pre automatické zmeny: 90%
-- Maximálny počet zmien za jeden beh: 200
+## Automatic Mode
+- Minimum confidence for automatic changes: 90%
+- Maximum changes per run: 200

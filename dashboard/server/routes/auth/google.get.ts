@@ -4,7 +4,7 @@ export default defineOAuthGoogleEventHandler({
   },
   async onSuccess(event, { user }) {
     // Only allow configured owner emails (comma-separated env var)
-    const allowedEmails = (process.env.ALLOWED_EMAILS || 'peterfusek1980@gmail.com')
+    const allowedEmails = (process.env.ALLOWED_EMAILS || '')
       .split(',')
       .map(e => e.trim().toLowerCase())
     if (!allowedEmails.includes(user.email?.toLowerCase())) {

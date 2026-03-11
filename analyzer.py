@@ -230,7 +230,7 @@ def summarize_analysis(results: list[dict]) -> dict:
             elif field.startswith("urls"):
                 summary["by_field_type"].setdefault("urls", 0)
                 summary["by_field_type"]["urls"] += 1
-            elif "note" in change.get("reason", "").lower() or "poznámk" in change.get("reason", "").lower():
+            elif "note" in change.get("reason", "").lower():
                 summary["by_field_type"]["enrichment_notes"] += 1
             elif "email" in change.get("reason", "").lower():
                 summary["by_field_type"]["enrichment_email"] += 1
