@@ -246,14 +246,17 @@ const steps = [
     <footer class="py-8 px-6 border-t border-neutral-800/50">
       <div class="max-w-5xl mx-auto flex items-center justify-between text-xs text-neutral-600">
         <span>Contact Refiner by <a href="https://instarea.sk" target="_blank" rel="noopener" class="text-neutral-500 hover:text-neutral-400 transition-colors">Instarea</a></span>
-        <a
-          href="https://github.com/instarea-sk/google-contacts-refiner"
-          target="_blank"
-          rel="noopener"
-          class="text-neutral-500 hover:text-neutral-400 transition-colors"
-        >
-          GitHub
-        </a>
+        <div class="flex items-center gap-4">
+          <NuxtLink to="/privacy" class="text-neutral-500 hover:text-neutral-400 transition-colors">Privacy</NuxtLink>
+          <a
+            href="https://github.com/instarea-sk/google-contacts-refiner"
+            target="_blank"
+            rel="noopener"
+            class="text-neutral-500 hover:text-neutral-400 transition-colors"
+          >
+            GitHub
+          </a>
+        </div>
       </div>
     </footer>
   </div>
