@@ -7,6 +7,10 @@ const isDemo = computed(() => !loggedIn.value)
 // Fetch review data
 const { data, status, refresh } = useFetch('/api/review')
 
+// Queue stats trend
+const { data: queueStats } = useFetch('/api/queue-stats')
+const showStats = ref(false)
+
 // Session state
 const sessionId = ref('')
 const decisions = ref<Record<string, ReviewDecision>>({})
@@ -446,6 +450,45 @@ const progressPercent = computed(() => {
           class="h-full bg-primary-500 transition-all duration-300"
           :style="{ width: `${progressPercent}%` }"
         />
+      </div>
+    </div>
+
+    <!-- Queue Stats Trend -->
+    <div v-if="queueStats?.length" class="rounded-lg border border-neutral-800 bg-neutral-900/50">
+      <div
+        class="flex items-center justify-between px-3 py-2 cursor-pointer hover:bg-neutral-800/30"
+        @click="showStats = !showStats"
+      >
+        <div class="flex items-center gap-2 text-xs text-neutral-400">
+          <UIcon :name="showStats ? 'i-lucide-chevron-down' : 'i-lucide-chevron-right'" class="size-3" />
+          <span>Queue Trend</span>
+          <span v-if="queueStats.length >= 2" class="text-neutral-600">
+            {{ queueStats[queueStats.length - 1].totalChanges }}
+            <template v-if="queueStats[queueStats.length - 1].totalChanges !== queueStats[queueStats.length - 2].totalChanges">
+              <span :class="queueStats[queueStats.length - 1].totalChanges < queueStats[queueStats.length - 2].totalChanges ? 'text-green-500' : 'text-red-400'">
+                ({{ queueStats[queueStats.length - 1].totalChanges < queueStats[queueStats.length - 2].totalChanges ? '' : '+' }}{{ queueStats[queueStats.length - 1].totalChanges - queueStats[queueStats.length - 2].totalChanges }})
+              </span>
+            </template>
+          </span>
+        </div>
+      </div>
+      <div v-if="showStats" class="px-3 pb-3">
+        <div class="flex items-end gap-px h-16">
+          <div
+            v-for="(entry, i) in queueStats.slice(-30)"
+            :key="i"
+            class="flex-1 bg-primary-500/60 hover:bg-primary-400/80 rounded-t-sm transition-colors relative group"
+            :style="{ height: `${Math.max(4, (entry.totalChanges / Math.max(...queueStats.slice(-30).map(e => e.totalChanges))) * 100)}%` }"
+          >
+            <div class="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 hidden group-hover:block bg-neutral-800 text-[10px] text-neutral-300 px-1.5 py-0.5 rounded whitespace-nowrap z-10">
+              {{ entry.date }}: {{ entry.totalChanges }}
+            </div>
+          </div>
+        </div>
+        <div class="flex justify-between text-[10px] text-neutral-600 mt-1">
+          <span>{{ queueStats.slice(-30)[0]?.date }}</span>
+          <span>{{ queueStats[queueStats.length - 1]?.date }}</span>
+        </div>
       </div>
     </div>
 

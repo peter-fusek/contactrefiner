@@ -254,3 +254,18 @@ export async function saveReviewDecisions(sessionId: string, changes: Array<Reco
 export async function appendFeedback(entries: FeedbackEntry[]): Promise<void> {
   await appendJsonl('data/feedback.jsonl', entries)
 }
+
+// --- Queue Stats API ---
+
+export interface QueueStatsEntry {
+  date: string
+  totalChanges: number
+  byCategory?: Record<string, number>
+}
+
+export async function getQueueStats(): Promise<QueueStatsEntry[]> {
+  return cachedRead('queue_stats', async () => {
+    const data = await readJson<QueueStatsEntry[]>('data/queue_stats.json')
+    return data ?? []
+  })
+}

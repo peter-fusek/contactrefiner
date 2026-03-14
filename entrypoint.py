@@ -26,6 +26,118 @@ logging.basicConfig(
 logger = logging.getLogger("contacts-refiner")
 
 
+def _auto_export_sessions():
+    """
+    Auto-export review sessions that have decisions but haven't been exported.
+
+    Replicates the dashboard export logic in Python so that Phase 0 can
+    process sessions without requiring a manual "Export for Pipeline" click.
+    """
+    import hashlib
+    import json
+    from pathlib import Path
+
+    from config import DATA_DIR
+
+    session_dir = DATA_DIR / "review_sessions"
+    if not session_dir.exists():
+        return
+
+    session_files = sorted(session_dir.glob("*.json"))
+    if not session_files:
+        return
+
+    # Find the latest review file (skipped_changes source)
+    review_files = sorted(
+        f for f in DATA_DIR.glob("review_*.json")
+        if "sessions" not in f.name and "decisions" not in f.name
+    )
+    if not review_files:
+        logger.info("Phase 0 auto-export: No review file found, skipping")
+        return
+
+    latest_review = review_files[-1]
+    with open(latest_review, encoding="utf-8") as f:
+        review_data = json.load(f)
+
+    # Build change lookup: changeId → metadata (same hash as dashboard)
+    change_map = {}
+    for item in review_data.get("items", []):
+        rn = item.get("resourceName", "")
+        dn = item.get("displayName", "")
+        for change in item.get("skipped_changes", []):
+            raw = f"{rn}|{change.get('field', '')}|{change.get('old', '')}|{change.get('new', '')}"
+            change_id = hashlib.sha256(raw.encode()).hexdigest()[:12]
+            change_map[change_id] = {
+                "resourceName": rn,
+                "displayName": dn,
+                "field": change.get("field", ""),
+                "old": change.get("old", ""),
+                "new": change.get("new", ""),
+                "confidence": change.get("confidence", 0),
+                "reason": change.get("reason", ""),
+            }
+
+    exported_count = 0
+    for session_file in session_files:
+        try:
+            with open(session_file, encoding="utf-8") as f:
+                session = json.load(f)
+        except (json.JSONDecodeError, IOError):
+            continue
+
+        decisions = session.get("decisions", {})
+        if not decisions or session.get("exportedAt"):
+            continue
+
+        # Build enriched changes list
+        enriched = []
+        for change_id, d in decisions.items():
+            decision = d.get("decision", "")
+            if decision in ("approved", "edited", "rejected"):
+                meta = change_map.get(change_id, {})
+                enriched.append({
+                    "changeId": change_id,
+                    "decision": decision,
+                    "editedValue": d.get("editedValue"),
+                    "decidedAt": d.get("decidedAt", ""),
+                    "resourceName": meta.get("resourceName"),
+                    "field": meta.get("field"),
+                    "old": meta.get("old"),
+                    "new": meta.get("new"),
+                    "confidence": meta.get("confidence"),
+                    "reason": meta.get("reason"),
+                })
+
+        if not enriched:
+            continue
+
+        # Write review_decisions file
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H-%M-%S")
+        sid = session.get("id", "unknown")
+        decisions_path = DATA_DIR / f"review_decisions_{timestamp}.json"
+        with open(decisions_path, "w", encoding="utf-8") as f:
+            json.dump({
+                "sessionId": sid,
+                "exportedAt": datetime.now().isoformat(),
+                "reviewFilePath": str(latest_review),
+                "changes": enriched,
+            }, f, ensure_ascii=False, indent=2)
+
+        # Mark session as exported
+        session["exportedAt"] = datetime.now().isoformat()
+        with open(session_file, "w", encoding="utf-8") as f:
+            json.dump(session, f, ensure_ascii=False, indent=2)
+
+        exported_count += 1
+        logger.info(f"Phase 0: Auto-exported {len(enriched)} decisions from session {sid}")
+
+    if exported_count:
+        logger.info(f"Phase 0: Auto-exported {exported_count} session(s)")
+    else:
+        logger.info("Phase 0: No unexported sessions found")
+
+
 def _process_review_feedback():
     """
     Phase 0: Process review decisions from the dashboard.
@@ -42,6 +154,12 @@ def _process_review_feedback():
 
     from config import DATA_DIR
     from memory import MemoryManager
+
+    # Auto-export any unexported sessions first
+    try:
+        _auto_export_sessions()
+    except Exception as e:
+        logger.warning(f"Phase 0: Auto-export failed (non-fatal): {e}")
 
     # Find unprocessed decision files
     pattern = str(DATA_DIR / "review_decisions_*.json")
@@ -277,6 +395,12 @@ def run():
         traceback.print_exc()
         sys.exit(1)
 
+    # Record queue stats after analysis
+    try:
+        _record_queue_stats()
+    except Exception as e:
+        logger.warning(f"Queue stats failed (non-fatal): {e}")
+
     phase1_elapsed = datetime.now() - start
     logger.info(f"Phase 1 completed in {phase1_elapsed}")
 
@@ -321,6 +445,68 @@ def run():
         logger.info("Phase 3 skipped (ENABLE_ACTIVITY_TAGGING not set)")
 
     _log_elapsed(start)
+
+
+def _record_queue_stats():
+    """Record current review queue size to queue_stats.json for trend tracking."""
+    import json
+    from config import DATA_DIR
+
+    # Find the latest review file to count pending changes
+    review_files = sorted(
+        f for f in DATA_DIR.glob("review_*.json")
+        if "sessions" not in f.name and "decisions" not in f.name
+    )
+    if not review_files:
+        return
+
+    try:
+        with open(review_files[-1], encoding="utf-8") as f:
+            review_data = json.load(f)
+
+        total_changes = sum(
+            len(item.get("skipped_changes", []))
+            for item in review_data.get("items", [])
+        )
+
+        # Count by category (reuse rule extraction)
+        from memory import MemoryManager
+        mem = MemoryManager()
+        by_category: dict[str, int] = {}
+        for item in review_data.get("items", []):
+            for change in item.get("skipped_changes", []):
+                cat = mem.extract_rule_category(change.get("reason", ""))
+                by_category[cat] = by_category.get(cat, 0) + 1
+
+        # Load existing stats
+        stats_path = DATA_DIR / "queue_stats.json"
+        stats = []
+        if stats_path.exists():
+            try:
+                with open(stats_path, encoding="utf-8") as f:
+                    stats = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                stats = []
+
+        # Append today's entry (replace if same date)
+        today = datetime.now().strftime("%Y-%m-%d")
+        stats = [s for s in stats if s.get("date") != today]
+        stats.append({
+            "date": today,
+            "totalChanges": total_changes,
+            "byCategory": by_category,
+        })
+
+        # Keep last 90 days
+        stats = stats[-90:]
+
+        with open(stats_path, "w", encoding="utf-8") as f:
+            json.dump(stats, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"Queue stats: {total_changes} pending changes recorded")
+
+    except Exception as e:
+        logger.warning(f"Queue stats recording failed (non-fatal): {e}")
 
 
 def _log_elapsed(start):
