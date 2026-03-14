@@ -18,8 +18,12 @@ INSTRUCTIONS_PATH = APP_DIR / "instructions.md"  # Ships with code, not data
 MEMORY_PATH = DATA_DIR / "memory.json"            # Persisted data (GCS in cloud)
 
 # Rule category extraction from reason strings
+# NOTE: Order matters — first match wins. More specific patterns must come first.
 RULE_CATEGORIES = {
-    "diacritics": r"diacritics",
+    "diacritics_given": r"diacritics.*given",
+    "diacritics_family": r"diacritics.*family",
+    "diacritics": r"diacritics",  # fallback for unqualified diacritics
+    "org_case": r"organization|letter casing \(org",
     "title_case": r"letter casing|Title Case",
     "phone_format": r"phone.*normalization|international format",
     "phone_type": r"phone.*type",
@@ -30,7 +34,6 @@ RULE_CATEGORIES = {
     "address_zip": r"postal code",
     "address_country": r"country",
     "address_parse": r"address.*pars",
-    "org_case": r"organization",
     "name_extract": r"name.*extract|inferred.*name",
     "name_split": r"name.*split|split.*name",
     "name_title": r"title.*extract|prefix.*extract",
@@ -38,11 +41,24 @@ RULE_CATEGORIES = {
     "family_name_fix": r"family.*name|familyName",
     "x500_dn": r"X\.500 DN",
     "org_from_email": r"inferred from email|organization.*email",
-    "domain_case": r"domain",
     "event_from_note": r"from notes|extracted from notes",
     "owner_email": r"owner email",
     "corporate_url": r"corporate.*(?:LinkedIn|website|directory|social media)",
     "shared_address": r"shared HQ|shared.*office.*address",
+}
+
+# Migration map: old Slovak/stale rule_stats keys → current English category
+_RULE_STATS_MIGRATION = {
+    # Slovak keys from pre-translation era
+    "URL nájdené v poznámke": "event_from_note",
+    "email nájdený v poznámke": "event_from_note",
+    "tel. číslo nájdené v poznámke": "event_from_note",
+    "dátum narodenia z poznámky": "event_from_note",
+    "meno odhadnuté z emailu": "name_extract",
+    # Removed category — org casing was never routed here
+    "domain_case": "org_case",
+    # Pre-split diacritics — merge into sub-categories if possible,
+    # otherwise keep as generic fallback
 }
 
 # Default empty memory structure
@@ -334,7 +350,53 @@ class MemoryManager:
                 # Merge with defaults for any missing keys
                 for key, default_val in _DEFAULT_MEMORY.items():
                     data.setdefault(key, default_val)
+                # Migrate stale rule_stats keys
+                if self._migrate_rule_stats(data):
+                    self._dirty = True
                 return data
             except (json.JSONDecodeError, IOError):
                 pass
         return dict(_DEFAULT_MEMORY)
+
+    @staticmethod
+    def _migrate_rule_stats(data: dict) -> bool:
+        """
+        Migrate old/stale rule_stats keys to current English categories.
+
+        Merges counts (approved, rejected, edited) into the target key,
+        recalculates adjusted_confidence, and removes the old key.
+        Returns True if any migration occurred.
+        """
+        rule_stats = data.get("rule_stats", {})
+        if not rule_stats:
+            return False
+
+        migrated = False
+        for old_key, new_key in _RULE_STATS_MIGRATION.items():
+            # Also match keys that start with the old key (e.g. Slovak variants
+            # with parenthesized suffixes like "dátum narodenia z poznámky (birthday)")
+            keys_to_migrate = [
+                k for k in list(rule_stats.keys())
+                if k == old_key or k.startswith(old_key)
+            ]
+            for k in keys_to_migrate:
+                old_stats = rule_stats.pop(k)
+                target = rule_stats.setdefault(new_key, {
+                    "approved": 0, "rejected": 0, "edited": 0,
+                })
+                target["approved"] = target.get("approved", 0) + old_stats.get("approved", 0)
+                target["rejected"] = target.get("rejected", 0) + old_stats.get("rejected", 0)
+                target["edited"] = target.get("edited", 0) + old_stats.get("edited", 0)
+
+                # Recalculate adjusted_confidence
+                total = target["approved"] + target["rejected"] + target["edited"]
+                if total >= 5:
+                    approved = target["approved"] + target["edited"]
+                    approval_rate = approved / total
+                    base = 0.75
+                    adjusted = (base * 10 + approval_rate * total) / (10 + total)
+                    target["adjusted_confidence"] = max(0.30, min(0.98, round(adjusted, 3)))
+
+                migrated = True
+
+        return migrated

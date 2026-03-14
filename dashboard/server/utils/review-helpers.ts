@@ -2,8 +2,12 @@ import { createHash } from 'node:crypto'
 import type { ReviewChange } from './types'
 
 // Rule category extraction from reason strings
+// NOTE: Order matters — first match wins. More specific patterns must come first.
 const RULE_PATTERNS: [string, RegExp][] = [
+  ['diacritics_given', /diacritics.*given/i],
+  ['diacritics_family', /diacritics.*family/i],
   ['diacritics', /diacritics/i],
+  ['org_case', /organization|letter casing \(org/i],
   ['title_case', /letter casing|Title Case/i],
   ['phone_format', /phone.*normalization|international format/i],
   ['phone_type', /phone.*type/i],
@@ -14,7 +18,6 @@ const RULE_PATTERNS: [string, RegExp][] = [
   ['address_zip', /postal code/i],
   ['address_country', /country/i],
   ['address_parse', /address.*pars/i],
-  ['org_case', /organization/i],
   ['name_extract', /name.*extract|inferred.*name/i],
   ['name_split', /name.*split|split.*name/i],
   ['name_title', /title.*extract|prefix.*extract/i],
@@ -22,7 +25,6 @@ const RULE_PATTERNS: [string, RegExp][] = [
   ['family_name_fix', /family.*name|familyName/i],
   ['x500_dn', /X\.500 DN/i],
   ['org_from_email', /inferred from email|organization.*email/i],
-  ['domain_case', /domain/i],
   ['event_from_note', /from notes|extracted from notes/i],
   ['owner_email', /owner email/i],
   ['corporate_url', /corporate.*(LinkedIn|website|directory|social media)/i],
