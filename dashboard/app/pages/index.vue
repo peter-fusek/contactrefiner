@@ -46,7 +46,7 @@ const features = [
   {
     icon: 'i-lucide-languages',
     title: 'Diacritics Restoration',
-    description: 'Fixes Štefan → Stefan, Kříž → Kriz and 899+ SK/CZ/HU name patterns automatically.',
+    description: 'Restores missing accents on Slovak and Czech names. Context-aware: only applies when the surname confirms SK/CZ origin.',
     color: 'text-primary-400',
   },
   {
@@ -54,6 +54,12 @@ const features = [
     title: 'Smart Formatting',
     description: 'Normalizes phone numbers, titles, company names, and name casing across all contacts.',
     color: 'text-cyan-400',
+  },
+  {
+    icon: 'i-lucide-trash-2',
+    title: 'Contact Cleanup',
+    description: 'Flags low-value one-off contacts — no full name, no email, no phone. Review and delete the clutter.',
+    color: 'text-orange-400',
   },
   {
     icon: 'i-lucide-brain',
@@ -68,12 +74,6 @@ const features = [
     color: 'text-blue-400',
   },
   {
-    icon: 'i-lucide-user-round-search',
-    title: 'LTNS Reconnect',
-    description: 'Identifies contacts you haven\'t talked to in over a year and generates reconnect prompts.',
-    color: 'text-rose-400',
-  },
-  {
     icon: 'i-lucide-shield-check',
     title: 'Privacy First',
     description: 'Runs on your own infrastructure. Your contacts never leave your Google account.',
@@ -83,7 +83,7 @@ const features = [
 
 const steps = [
   { num: '01', title: 'Authenticate', description: 'Connect your Google account with OAuth2. Read-only access to Contacts, Gmail, and Calendar.' },
-  { num: '02', title: 'Analyze', description: 'The pipeline scans all contacts with 23 rule categories, then AI reviews ambiguous cases.' },
+  { num: '02', title: 'Analyze', description: 'The pipeline scans all contacts with 26 rule categories — diacritics, formatting, cleanup — then AI reviews ambiguous cases.' },
   { num: '03', title: 'Review & Fix', description: 'Review changes on the dashboard. Approve, reject, or edit. Only approved changes are applied.' },
 ]
 </script>
@@ -133,7 +133,7 @@ const steps = [
 
         <p class="text-lg text-neutral-400 max-w-xl mx-auto leading-relaxed">
           Contact Refiner automatically fixes diacritics, formatting, and duplicates
-          in your Google Contacts. 23 rule categories + Claude AI review.
+          in your Google Contacts. 26 rule categories + Claude AI review.
           You approve every change.
         </p>
 
@@ -173,7 +173,7 @@ const steps = [
               <span class="text-primary-400">Found 2,847 contacts</span>
             </div>
             <div>
-              <span class="text-amber-400">  847 changes detected (23 rule categories)</span>
+              <span class="text-amber-400">  847 changes detected (26 rule categories)</span>
             </div>
             <div>
               <span class="text-cyan-400">  412 HIGH confidence → auto-fixed</span>
