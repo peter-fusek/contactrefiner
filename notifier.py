@@ -136,7 +136,7 @@ def send_email_digest(run_state: dict, start: datetime) -> bool:
     try:
         resend.api_key = api_key
         result = resend.Emails.send({
-            "from": "Contact Refiner <noreply@contactrefiner.com>",
+            "from": "Contact Refiner <noreply@notify.instarea.sk>",
             "to": ["peterfusek1980@gmail.com"],
             "subject": subject,
             "text": body,
