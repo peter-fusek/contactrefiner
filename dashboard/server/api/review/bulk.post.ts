@@ -68,11 +68,13 @@ export default defineEventHandler(async (event) => {
 
   session.stats.total = Object.keys(session.decisions).length
 
-  const saves: Promise<void>[] = [saveReviewSession(session)]
+  // Save session (critical) and feedback (non-fatal)
+  await saveReviewSession(session)
   if (feedbackEntries.length) {
-    saves.push(appendFeedback(feedbackEntries))
+    appendFeedback(feedbackEntries).catch((err) => {
+      console.error('[Review] Feedback append failed (non-fatal):', (err as Error).message)
+    })
   }
-  await Promise.all(saves)
 
   return { session }
 })

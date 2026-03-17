@@ -69,12 +69,13 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Save session and feedback in parallel
-  const saves: Promise<void>[] = [saveReviewSession(session)]
+  // Save session (critical) and feedback (non-fatal) in parallel
+  await saveReviewSession(session)
   if (feedbackEntries.length) {
-    saves.push(appendFeedback(feedbackEntries))
+    appendFeedback(feedbackEntries).catch((err) => {
+      console.error('[Review] Feedback append failed (non-fatal):', (err as Error).message)
+    })
   }
-  await Promise.all(saves)
 
   return { session }
 })
