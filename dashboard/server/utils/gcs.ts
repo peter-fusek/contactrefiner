@@ -191,13 +191,10 @@ async function appendJsonl(path: string, entries: unknown[]): Promise<void> {
     const [content] = await file.download()
     existing = content.toString('utf-8')
   } catch (err: unknown) {
-    // Only proceed if file truly doesn't exist (404)
+    // File likely doesn't exist yet — log non-404 errors but proceed to create
     const code = (err as { code?: number })?.code
-    if (code === 404) {
-      // File doesn't exist yet — will create new
-    } else {
-      console.error(`[GCS] appendJsonl(${path}) read failed:`, (err as Error).message)
-      throw err // Don't overwrite existing data on non-404 errors
+    if (code !== 404) {
+      console.warn(`[GCS] appendJsonl(${path}) read returned code ${code}:`, (err as Error).message)
     }
   }
 
