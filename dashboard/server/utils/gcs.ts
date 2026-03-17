@@ -176,10 +176,20 @@ export function isBatchMarker(entry: ChangelogLine): entry is BatchMarker {
 
 async function writeJson(path: string, data: unknown): Promise<void> {
   const content = JSON.stringify(data, null, 2)
-  await getBucket().file(path).save(content, {
-    contentType: 'application/json',
-    resumable: false,
-  })
+  try {
+    await getBucket().file(path).save(content, {
+      contentType: 'application/json',
+      resumable: false,
+    })
+  } catch (err) {
+    // Retry once — GCS can fail on overwrite with precondition errors
+    console.warn(`[GCS] writeJson(${path}) first attempt failed: ${(err as Error).message}, retrying...`)
+    await getBucket().file(path).save(content, {
+      contentType: 'application/json',
+      resumable: false,
+      metadata: { cacheControl: 'no-cache' },
+    })
+  }
 }
 
 async function appendJsonl(path: string, entries: unknown[]): Promise<void> {
