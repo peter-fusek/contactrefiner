@@ -4,7 +4,7 @@ definePageMeta({ layout: false })
 useHead({
   title: 'Contact Refiner — AI-Powered Google Contacts Cleanup',
   meta: [
-    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, daily automated pipeline, AI review, and a dashboard to approve every change.' },
+    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, 22,000+ changes applied, daily automated pipeline, AI review, and a dashboard to approve every change.' },
     { property: 'og:title', content: 'Contact Refiner — AI-Powered Google Contacts Cleanup' },
     { property: 'og:description', content: 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. AI-powered analysis with human review.' },
     { property: 'og:type', content: 'website' },
@@ -26,7 +26,7 @@ useHead({
         'applicationCategory': 'BusinessApplication',
         'operatingSystem': 'Web',
         'url': 'https://contactrefiner.com',
-        'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. AI-powered analysis with human review.',
+        'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. 22,000+ changes applied. AI-powered analysis with human review and daily email digest.',
         'offers': {
           '@type': 'Offer',
           'price': '0',
@@ -80,9 +80,15 @@ const features = [
     color: 'text-violet-400',
   },
   {
+    icon: 'i-lucide-bell-ring',
+    title: 'Daily Email Digest',
+    description: 'Get a morning summary of what the pipeline fixed overnight. Changes applied, errors, queue status — all in one email.',
+    color: 'text-rose-400',
+  },
+  {
     icon: 'i-lucide-shield-check',
     title: 'Privacy First',
-    description: 'Runs on your own infrastructure. Your contacts never leave your Google account.',
+    description: 'Runs on your own infrastructure. Security audited. Your contacts never leave your Google account.',
     color: 'text-green-400',
   },
 ]
@@ -129,7 +135,7 @@ const steps = [
       <div class="max-w-3xl mx-auto text-center space-y-6">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-800 bg-neutral-900/50 text-xs text-neutral-400">
           <span class="size-1.5 rounded-full bg-primary-400 animate-pulse-glow" />
-          Open source CLI tool for Google Contacts
+          Open source · Security audited · 22,000+ changes applied
         </div>
 
         <h1 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-100 leading-tight">
@@ -139,7 +145,7 @@ const steps = [
 
         <p class="text-lg text-neutral-400 max-w-xl mx-auto leading-relaxed">
           Contact Refiner automatically fixes diacritics, formatting, and duplicates
-          in your Google Contacts. 26 rule categories + Claude AI review.
+          in your Google Contacts. 26 rule categories + Claude AI review + daily email digest.
           You approve every change.
         </p>
 
@@ -181,13 +187,13 @@ const steps = [
               <span class="text-amber-400">  4,331 changes detected (26 rule categories)</span>
             </div>
             <div>
-              <span class="text-cyan-400">  1,840 HIGH confidence → auto-fixed</span>
+              <span class="text-cyan-400">  2,140 HIGH confidence → auto-fixed</span>
             </div>
             <div>
               <span class="text-neutral-400">  394 MEDIUM → queued for review</span>
             </div>
             <div class="mt-2 text-neutral-500">$ python main.py fix --auto</div>
-            <div class="text-primary-400">  Applied 1,840 changes in 22s</div>
+            <div class="text-primary-400">  Applied 2,140 changes in 28s</div>
             <div class="mt-2 text-neutral-600">
               # Review remaining changes at<br>
               # https://contactrefiner.com/review
@@ -201,20 +207,20 @@ const steps = [
     <section class="py-12 px-6 border-t border-neutral-800/50">
       <div class="max-w-4xl mx-auto grid grid-cols-2 md:grid-cols-4 gap-6 text-center">
         <div>
-          <div class="text-2xl md:text-3xl font-bold text-primary-400 tabular-nums">10,761</div>
+          <div class="text-2xl md:text-3xl font-bold text-primary-400 tabular-nums">22,189</div>
           <div class="text-xs text-neutral-500 mt-1">Changes applied</div>
         </div>
         <div>
-          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">26</div>
-          <div class="text-xs text-neutral-500 mt-1">Rule categories</div>
+          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">6,400+</div>
+          <div class="text-xs text-neutral-500 mt-1">Review decisions</div>
         </div>
         <div>
           <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">5,551</div>
           <div class="text-xs text-neutral-500 mt-1">Contacts managed</div>
         </div>
         <div>
-          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">Daily</div>
-          <div class="text-xs text-neutral-500 mt-1">Automated pipeline</div>
+          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">26</div>
+          <div class="text-xs text-neutral-500 mt-1">Rule categories</div>
         </div>
       </div>
     </section>

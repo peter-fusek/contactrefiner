@@ -395,11 +395,13 @@ def cmd_ai_review(resume=False) -> int:
             contacts_with_changes.append((person, changes))
 
         # Call AI
+        ai_batch_failed = False
         try:
             enhanced_list = ai.enhance_batch(contacts_with_changes)
         except Exception as e:
-            print(f"   ⚠️  AI batch chyba: {e}")
+            print(f"   ⚠️  AI batch error: {e}")
             enhanced_list = [ch for _, ch in contacts_with_changes]
+            ai_batch_failed = True
 
         # Update workplan with AI results
         for j, (bi, ci, rn, orig_changes) in enumerate(batch_items):
@@ -434,8 +436,9 @@ def cmd_ai_review(resume=False) -> int:
                     "total": len(all_ch),
                 }
 
-                # Record in history so next run skips this contact
-                ai_history[rn] = _changes_hash(orig_changes)
+                # Record in history so next run skips this contact (skip if AI batch failed)
+                if not ai_batch_failed:
+                    ai_history[rn] = _changes_hash(orig_changes)
 
         end_idx = min(i + AI_MAX_CONTACTS_PER_BATCH, total)
         print(f"   AI reviewed: {end_idx}/{total}")

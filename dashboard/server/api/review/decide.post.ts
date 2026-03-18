@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
   if (!body?.sessionId || !body?.decisions?.length) {
     throw createError({ statusCode: 400, message: 'Missing sessionId or decisions' })
   }
+  if (body.decisions.length > 500) {
+    throw createError({ statusCode: 400, message: 'Too many decisions per request (max 500)' })
+  }
 
   // Load or create session
   let session: ReviewSession | null = null
@@ -80,7 +83,7 @@ export default defineEventHandler(async (event) => {
     await saveReviewSession(session)
   } catch (err) {
     console.error('[Review] saveReviewSession failed:', (err as Error).message, (err as Error).stack)
-    throw createError({ statusCode: 500, message: `Save failed: ${(err as Error).message}` })
+    throw createError({ statusCode: 500, message: 'Save operation failed. Please try again.' })
   }
   if (feedbackEntries.length) {
     appendFeedback(feedbackEntries).catch((err) => {

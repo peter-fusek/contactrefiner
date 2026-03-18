@@ -65,7 +65,7 @@ watch(data, (d) => {
         decisions.value = parsed.decisions
         recomputeStats()
       }
-    } catch { /* ignore */ }
+    } catch (e) { console.warn('[Review] Failed to restore session from localStorage:', e) }
   }
 }, { immediate: true })
 

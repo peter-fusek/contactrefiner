@@ -19,6 +19,9 @@ export default defineEventHandler(async (event) => {
   if (!body?.sessionId || !body?.changeIds?.length) {
     throw createError({ statusCode: 400, message: 'Missing sessionId or changeIds' })
   }
+  if (body.changeIds.length > 500) {
+    throw createError({ statusCode: 400, message: 'Too many changes per request (max 500)' })
+  }
   if (!['approved', 'rejected'].includes(body.decision)) {
     throw createError({ statusCode: 400, message: 'Invalid decision value' })
   }
@@ -69,7 +72,12 @@ export default defineEventHandler(async (event) => {
   session.stats.total = Object.keys(session.decisions).length
 
   // Save session (critical) and feedback (non-fatal)
-  await saveReviewSession(session)
+  try {
+    await saveReviewSession(session)
+  } catch (err) {
+    console.error('[Review] saveReviewSession failed:', (err as Error).message, (err as Error).stack)
+    throw createError({ statusCode: 500, message: 'Save operation failed. Please try again.' })
+  }
   if (feedbackEntries.length) {
     appendFeedback(feedbackEntries).catch((err) => {
       console.error('[Review] Feedback append failed (non-fatal):', (err as Error).message)

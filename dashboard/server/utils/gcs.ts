@@ -73,8 +73,12 @@ async function readJson<T>(path: string): Promise<T | null> {
     const [content] = await getBucket().file(path).download()
     return JSON.parse(content.toString('utf-8')) as T
   } catch (err) {
-    console.error(`[GCS] readJson(${path}) failed:`, (err as Error).message)
-    return null
+    const code = (err as { code?: number }).code
+    // 404 = file not found — legitimate "no data" case
+    if (code === 404) return null
+    // All other errors (auth, network, permissions) should propagate
+    console.error(`[GCS] readJson(${path}) failed (code=${code}):`, (err as Error).message)
+    throw err
   }
 }
 

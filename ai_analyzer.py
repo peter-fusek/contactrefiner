@@ -409,7 +409,7 @@ Rules:
             return text
 
         except Exception as e:
-            print(f"   ⚠️  AI chyba: {e}")
+            print(f"   ⚠️  AI error: {e}")
             return None
 
     def _estimate_cost(self, input_tokens: int, output_tokens: int) -> float:
