@@ -353,6 +353,7 @@ def process_batches(
         changelog.log_batch_start(batch_num, len(contacts_in_batch))
         batch_success = 0
         batch_failed = 0
+        stale_contacts = []
 
         for i, result in enumerate(contacts_in_batch):
             contact_idx = start_idx + i
@@ -367,7 +368,7 @@ def process_batches(
             resource_name = result["resourceName"]
             person = contacts_lookup.get(resource_name)
             if not person:
-                print(f"   ⚠️  [{contact_idx}] contact not found: {resource_name}")
+                stale_contacts.append(resource_name)
                 batch_failed += 1
                 continue
 
@@ -410,6 +411,10 @@ def process_batches(
             except Exception as e:
                 batch_failed += 1
                 print(f"   ❌ [{contact_idx}] {result['displayName']}: {e}")
+
+        if stale_contacts:
+            print(f"   ⚠️  {len(stale_contacts)} stale contact(s) not found: {', '.join(stale_contacts[:5])}"
+                  + (f" (+{len(stale_contacts)-5} more)" if len(stale_contacts) > 5 else ""))
 
         changelog.log_batch_end(batch_num, batch_success, batch_failed)
         total_success += batch_success

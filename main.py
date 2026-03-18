@@ -284,6 +284,8 @@ def cmd_fix(auto_mode=False, confidence_threshold=0.90, dry_run=False):
             msg += f", 📋 {len(skipped)} for review"
         send_macos_notification("Contacts Refiner", msg)
 
+    return result
+
 
 def cmd_ai_review(resume=False) -> int:
     """AI review of MEDIUM confidence changes — checkpointed, resumable.

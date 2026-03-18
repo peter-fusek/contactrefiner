@@ -429,7 +429,10 @@ def run():
     logger.info(f"Step 3/3: Auto-fix HIGH {'(DRY RUN)' if dry_run else ''}")
     try:
         from main import cmd_fix
-        cmd_fix(auto_mode=True, confidence_threshold=0.90, dry_run=dry_run)
+        fix_result = cmd_fix(auto_mode=True, confidence_threshold=0.90, dry_run=dry_run)
+        if fix_result:
+            run_state["changes_applied"] = fix_result.get("success", 0)
+            run_state["changes_failed"] = fix_result.get("failed", 0)
     except Exception as e:
         logger.error(f"Auto-fix failed: {e}")
         run_state["errors"].append(f"Phase 1 auto-fix: {e}")

@@ -80,7 +80,11 @@ class PeopleAPIClient:
                     time.sleep(delay)
                     continue
 
-                # Client error — don't retry
+                # 409 Conflict (etag mismatch) — don't count as retry attempt
+                if status == 409:
+                    raise
+
+                # Other client errors — don't retry
                 raise
 
             except Exception as e:
@@ -205,26 +209,42 @@ class PeopleAPIClient:
         update_fields: str = UPDATE_PERSON_FIELDS,
     ) -> dict:
         """
-        Update a contact.
+        Update a contact with automatic 409 retry.
 
-        Args:
-            resource_name: e.g. "people/c1234567890"
-            etag: Current etag for optimistic locking.
-            person_body: Dict with fields to update.
-            update_fields: Comma-separated field mask.
-
-        Returns:
-            Updated person resource.
+        On HTTP 409 Conflict (etag mismatch), re-fetches the contact to get
+        a fresh etag and retries once. This handles contacts modified between
+        backup and fix time.
         """
         person_body["etag"] = etag
 
-        return self._retry(
-            self.people.updateContact,
-            is_write=True,
-            resourceName=resource_name,
-            updatePersonFields=update_fields,
-            body=person_body,
-        )
+        try:
+            return self._retry(
+                self.people.updateContact,
+                is_write=True,
+                resourceName=resource_name,
+                updatePersonFields=update_fields,
+                body=person_body,
+            )
+        except HttpError as e:
+            status = e.resp.status if e.resp else 0
+            if status != 409:
+                raise
+
+            # 409 Conflict — re-fetch for fresh etag and retry once
+            print(f"  🔄 409 Conflict on {resource_name}, re-fetching etag...")
+            fresh = self.get_contact(resource_name)
+            fresh_etag = fresh.get("etag", "")
+            if not fresh_etag:
+                raise
+
+            person_body["etag"] = fresh_etag
+            return self._retry(
+                self.people.updateContact,
+                is_write=True,
+                resourceName=resource_name,
+                updatePersonFields=update_fields,
+                body=person_body,
+            )
 
     def batch_update_contacts(
         self,
