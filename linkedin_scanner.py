@@ -389,6 +389,12 @@ def build_google_search_url(name: str, company: str = "") -> str:
     return f"https://www.google.com/search?q={quote_plus(query)}"
 
 
+def build_linkedin_search_url(name: str) -> str:
+    """Build a LinkedIn people search URL. More reliable than Google for profile discovery."""
+    from urllib.parse import quote_plus
+    return f"https://www.linkedin.com/search/results/people/?keywords={quote_plus(name)}&origin=GLOBAL_SEARCH_HEADER"
+
+
 def verify_name_match(expected_name: str, profile_name: str, threshold: int = 70) -> bool:
     """
     Verify that a LinkedIn profile name matches the expected contact name.
