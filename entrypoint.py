@@ -144,14 +144,22 @@ def _move_to_failed(filepath: str, reason: str):
     from pathlib import Path
     from config import DATA_DIR
 
+    # Path containment check — only process files from DATA_DIR
+    src = Path(filepath).resolve()
+    if not str(src).startswith(str(DATA_DIR.resolve())):
+        logger.error(f"Phase 0: Refusing to move file outside DATA_DIR: {filepath}")
+        return
+
     failed_dir = DATA_DIR / "failed"
     failed_dir.mkdir(exist_ok=True)
-    failed_path = failed_dir / Path(filepath).name
+    failed_path = failed_dir / src.name
+    # Truncate reason to prevent log injection from file content
+    safe_reason = reason[:200].replace("\n", " ").replace("\r", "")
     try:
-        shutil.move(filepath, failed_path)
-        logger.error(f"Phase 0: {reason} — {filepath} moved to failed/")
+        shutil.move(str(src), failed_path)
+        logger.error(f"Phase 0: {safe_reason} — {src.name} moved to failed/")
     except OSError as e:
-        logger.error(f"Phase 0: {reason} — {filepath} could not be moved to failed/: {e}")
+        logger.error(f"Phase 0: {safe_reason} — {src.name} could not be moved: {e}")
 
 
 def _process_review_feedback():

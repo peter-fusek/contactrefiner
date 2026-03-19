@@ -310,12 +310,12 @@ class LinkedInScanner:
 
         url = signals.get("linkedin_url", "")
         if url:
-            # Short form for Apple Contacts readability
+            # Only embed validated LinkedIn URLs (prevent injection via malformed URLs)
+            url = normalize_linkedin_url(url)
             slug = LINKEDIN_PROFILE_RE.search(url)
             if slug:
                 lines.append(f"LinkedIn: linkedin.com/in/{slug.group(1)}")
-            else:
-                lines.append(f"LinkedIn: {url}")
+            # Skip URLs that don't match the expected pattern
 
         headline = signals.get("headline", "")
         if headline:

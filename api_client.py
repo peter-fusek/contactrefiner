@@ -230,21 +230,11 @@ class PeopleAPIClient:
             if status != 409:
                 raise
 
-            # 409 Conflict — re-fetch for fresh etag and retry once
-            print(f"  🔄 409 Conflict on {resource_name}, re-fetching etag...")
-            fresh = self.get_contact(resource_name)
-            fresh_etag = fresh.get("etag", "")
-            if not fresh_etag:
-                raise
-
-            person_body["etag"] = fresh_etag
-            return self._retry(
-                self.people.updateContact,
-                is_write=True,
-                resourceName=resource_name,
-                updatePersonFields=update_fields,
-                body=person_body,
-            )
+            # 409 Conflict — contact was modified between our read and write.
+            # Re-raise rather than blindly overwriting with stale data.
+            # The caller (batch_processor) handles this as a failed contact.
+            print(f"  ⚠️  409 Conflict on {resource_name} — contact modified externally, skipping")
+            raise
 
     def batch_update_contacts(
         self,
