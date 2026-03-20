@@ -775,6 +775,12 @@ onUnmounted(() => {
               <span class="text-xs font-mono text-neutral-500 w-28 shrink-0 truncate">{{ formatFieldShort(change.field) }}</span>
               <div class="flex-1 min-w-0">
                 <DiffDisplay :old-value="change.old" :new-value="change.new" />
+                <span v-if="change.ruleCategory === 'tobedeleted'" class="block text-[10px] text-neutral-600 mt-0.5">
+                  {{ change.reason }}
+                  <template v-if="change.extra?.has_fields?.length">
+                    <span class="text-neutral-500"> · Has: {{ change.extra.has_fields.join(' | ') }}</span>
+                  </template>
+                </span>
               </div>
               <span class="text-[10px] text-neutral-600 tabular-nums w-10 text-right shrink-0">{{ (change.confidence * 100).toFixed(0) }}%</span>
               <div v-if="!isDemo" class="flex items-center gap-1 shrink-0">
@@ -784,6 +790,16 @@ onUnmounted(() => {
                 <template v-else>
                   <UButton size="xs" variant="ghost" color="success" icon="i-lucide-check" @click.stop="decide(change.id, 'approved')" />
                   <UButton size="xs" variant="ghost" color="error" icon="i-lucide-x" @click.stop="decide(change.id, 'rejected')" />
+                  <a
+                    v-if="change.ruleCategory === 'tobedeleted' && change.resourceName !== '***'"
+                    :href="`https://contacts.google.com/person/${change.resourceName.replace('people/', '')}`"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-neutral-600 hover:text-neutral-400"
+                    title="View in Google Contacts"
+                  >
+                    <UIcon name="i-lucide-external-link" class="size-3.5" />
+                  </a>
                 </template>
               </div>
             </div>
@@ -804,6 +820,12 @@ onUnmounted(() => {
               <span class="text-xs font-mono text-neutral-500 w-28 shrink-0 truncate">{{ formatFieldShort(change.field) }}</span>
               <div class="flex-1 min-w-0">
                 <DiffDisplay :old-value="change.old" :new-value="change.new" />
+                <span v-if="change.ruleCategory === 'tobedeleted'" class="block text-[10px] text-neutral-600 mt-0.5">
+                  {{ change.reason }}
+                  <template v-if="change.extra?.has_fields?.length">
+                    <span class="text-neutral-500"> · Has: {{ change.extra.has_fields.join(' | ') }}</span>
+                  </template>
+                </span>
               </div>
               <span class="text-[10px] text-neutral-600 tabular-nums w-10 text-right shrink-0">{{ (change.confidence * 100).toFixed(0) }}%</span>
               <div v-if="!isDemo" class="flex items-center gap-1 shrink-0">
@@ -815,6 +837,16 @@ onUnmounted(() => {
                   <UButton size="xs" variant="ghost" color="success" icon="i-lucide-check" @click.stop="decide(change.id, 'approved')" />
                   <UButton size="xs" variant="ghost" color="error" icon="i-lucide-x" @click.stop="decide(change.id, 'rejected')" />
                   <UButton size="xs" variant="ghost" color="neutral" icon="i-lucide-skip-forward" @click.stop="decide(change.id, 'skipped')" />
+                  <a
+                    v-if="change.ruleCategory === 'tobedeleted' && change.resourceName !== '***'"
+                    :href="`https://contacts.google.com/person/${change.resourceName.replace('people/', '')}`"
+                    target="_blank"
+                    rel="noopener"
+                    class="text-neutral-600 hover:text-neutral-400"
+                    title="View in Google Contacts"
+                  >
+                    <UIcon name="i-lucide-external-link" class="size-3.5" />
+                  </a>
                 </template>
               </div>
             </div>

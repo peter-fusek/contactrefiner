@@ -117,12 +117,30 @@ def _flag_deletion_candidate(person: dict) -> list[dict]:
 
     display = get_display_name(person)
     conf = 0.55 if signals <= 0.5 else 0.45
+
+    # Collect what the contact DOES have for review context
+    has_fields = []
+    for e in emails:
+        has_fields.append(f"email: {e.get('value', '')}")
+    for p in person.get("phoneNumbers", []):
+        has_fields.append(f"phone: {p.get('value', '')}")
+    for o in orgs:
+        org_name = o.get("name", "")
+        org_title = o.get("title", "")
+        if org_name or org_title:
+            has_fields.append(f"org: {org_title + ' @ ' if org_title else ''}{org_name}")
+    for b in bios:
+        val = b.get("value", "").strip()
+        if val:
+            has_fields.append(f"notes: {val[:80]}")
+
     return [{
         "field": "contact",
         "old": display,
         "new": "__TO_BE_DELETED__",
         "confidence": conf,
         "reason": f"low-value contact deletion candidate ({', '.join(reasons)})",
+        "extra": {"has_fields": has_fields} if has_fields else None,
     }]
 
 
