@@ -124,6 +124,22 @@ def send_email_digest(run_state: dict, start: datetime) -> bool:
     else:
         body_lines.append("Errors: none")
 
+    # LinkedIn Social Signals summary
+    try:
+        import json
+        from config import DATA_DIR
+        signals_path = DATA_DIR / "linkedin_signals.json"
+        if signals_path.exists():
+            sig_data = json.loads(signals_path.read_text(encoding="utf-8"))
+            sig_list = list(sig_data.get("signals", {}).values())
+            job_changes = sum(1 for s in sig_list if s.get("signal_type") == "job_change")
+            body_lines.extend([
+                "",
+                f"LinkedIn Signals: {len(sig_list)} profiles, {job_changes} job changes",
+            ])
+    except Exception:
+        pass
+
     body_lines.extend([
         "",
         "— Contact Refiner",

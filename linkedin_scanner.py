@@ -56,7 +56,7 @@ class LinkedInScanner:
         self.contacts = contacts
         self._contacts_by_rn = {get_resource_name(c): c for c in contacts}
         self._cache = self._load_cache()
-        self._results: dict[str, dict] = {}
+        self._results: dict[str, dict] = self._load_existing_results()
 
     # ── Target Selection ─────────────────────────────────────────────
 
@@ -346,6 +346,19 @@ class LinkedInScanner:
 
     # ── Cache & Persistence ──────────────────────────────────────────
 
+    def _load_existing_results(self) -> dict:
+        """Load existing scan results so new scans merge incrementally."""
+        if SCAN_RESULTS_FILE.exists():
+            try:
+                data = json.loads(SCAN_RESULTS_FILE.read_text(encoding="utf-8"))
+                existing = data.get("signals", {})
+                if existing:
+                    logger.info(f"LinkedIn: Loaded {len(existing)} existing signals")
+                return existing
+            except (json.JSONDecodeError, IOError):
+                pass
+        return {}
+
     def _load_cache(self) -> dict:
         if SCAN_CACHE_FILE.exists():
             try:
@@ -359,7 +372,7 @@ class LinkedInScanner:
         with open(SCAN_CACHE_FILE, "w", encoding="utf-8") as f:
             json.dump(self._cache, f, ensure_ascii=False, indent=2)
 
-    def save_results(self):
+    def save_results(self, upload_to_gcs: bool = True):
         SCAN_RESULTS_FILE.parent.mkdir(parents=True, exist_ok=True)
         with open(SCAN_RESULTS_FILE, "w", encoding="utf-8") as f:
             json.dump(
@@ -370,6 +383,10 @@ class LinkedInScanner:
                 },
                 f, ensure_ascii=False, indent=2,
             )
+
+        # Auto-upload to GCS so dashboard stays fresh
+        if upload_to_gcs:
+            _upload_signals_to_gcs()
 
     @property
     def results(self) -> dict[str, dict]:
@@ -575,3 +592,20 @@ def parse_linkedin_activity(page_text: str) -> dict:
                 break
 
     return result
+
+
+def _upload_signals_to_gcs():
+    """Upload linkedin_signals.json to GCS so the dashboard stays fresh."""
+    from config import ENVIRONMENT
+    if ENVIRONMENT == "cloud":
+        return  # GCS FUSE handles sync in cloud mode
+
+    try:
+        from google.cloud import storage
+        client = storage.Client()
+        bucket = client.bucket("contacts-refiner-data")
+        blob = bucket.blob("data/linkedin_signals.json")
+        blob.upload_from_filename(str(SCAN_RESULTS_FILE))
+        logger.info("LinkedIn: Signals uploaded to GCS")
+    except Exception as e:
+        logger.warning(f"LinkedIn: GCS upload failed (non-fatal): {e}")
