@@ -6,6 +6,7 @@
 - Python pipeline: `uv run python main.py analyze` / `uv run python main.py fix --auto`
 - Full Python CLI: `backup`, `analyze`, `fix`, `fix --auto`, `ai-review`
 - Dashboard build: `cd dashboard && pnpm build` / `pnpm preview` (test prod locally)
+- **Dev server cleanup**: Global PreToolUse hook auto-kills stale Nuxt processes before starting new `pnpm dev`
 
 ## Deploy
 - Render auto-deploys dashboard on push to main (~5min)
