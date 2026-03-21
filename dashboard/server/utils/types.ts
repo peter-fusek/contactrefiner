@@ -280,6 +280,7 @@ export interface FollowUpStats {
   job_change: number
   active: number
   profile_only: number
+  no_activity: number
   no_linkedin: number
   avg_completeness: number
 }

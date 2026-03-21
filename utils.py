@@ -264,3 +264,24 @@ def safe_get_nested(d: dict, *keys, default=None):
         except (KeyError, IndexError, TypeError, ValueError):
             return default
     return current
+
+
+def upload_file_to_gcs(local_path, blob_name: str, logger_prefix: str) -> None:
+    """Upload a local file to GCS (no-op in cloud mode where GCS FUSE handles sync)."""
+    import logging
+    from config import ENVIRONMENT
+    log = logging.getLogger("contacts-refiner")
+    if ENVIRONMENT == "cloud":
+        return
+    try:
+        import os
+        from google.cloud import storage
+        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/dashboard-reader-key.json")
+        if os.path.exists(creds_path):
+            os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
+        client = storage.Client()
+        bucket = client.bucket("contacts-refiner-data")
+        bucket.blob(blob_name).upload_from_filename(str(local_path))
+        log.info(f"{logger_prefix}: Uploaded to GCS")
+    except Exception as e:
+        log.warning(f"{logger_prefix}: GCS upload failed (non-fatal): {e}")

@@ -26,6 +26,7 @@ from config import (
     FOLLOWUP_SCORES_FILE,
     FOLLOWUP_TOP_N,
 )
+from interaction_scanner import _classify_url
 
 logger = logging.getLogger("contacts-refiner.followup")
 
@@ -43,22 +44,6 @@ def load_linkedin_signals(path: Optional[Path] = None) -> dict[str, dict]:
     except (json.JSONDecodeError, KeyError) as e:
         logger.warning(f"FollowUp: Failed to parse linkedin_signals.json: {e}")
         return {}
-
-
-def _classify_url(url: str) -> str:
-    """Classify URL type — mirrors interaction_scanner._classify_url."""
-    url_lower = url.lower()
-    if "linkedin.com" in url_lower:
-        return "linkedin"
-    if "facebook.com" in url_lower or "fb.com" in url_lower:
-        return "facebook"
-    if "twitter.com" in url_lower or "x.com" in url_lower:
-        return "twitter"
-    if "instagram.com" in url_lower:
-        return "instagram"
-    if "github.com" in url_lower:
-        return "github"
-    return "website"
 
 
 @dataclass
@@ -319,6 +304,7 @@ def build_followup_scores_json(scored_list: list[FollowUpScore]) -> dict:
         "job_change": sum(1 for t in li_types if t == "job_change"),
         "active": sum(1 for t in li_types if t == "active"),
         "profile_only": sum(1 for t in li_types if t == "profile"),
+        "no_activity": sum(1 for t in li_types if t == "no_activity"),
         "no_linkedin": sum(1 for s in scored_list if not s.linkedin_signal),
         "avg_completeness": round(
             sum(s.completeness for s in scored_list) / len(scored_list), 1
@@ -335,20 +321,5 @@ def build_followup_scores_json(scored_list: list[FollowUpScore]) -> dict:
 
 def upload_followup_scores_to_gcs():
     """Upload followup_scores.json to GCS so the dashboard stays fresh."""
-    from config import ENVIRONMENT
-    if ENVIRONMENT == "cloud":
-        return  # GCS FUSE handles sync in cloud mode
-
-    try:
-        import os
-        from google.cloud import storage
-        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/dashboard-reader-key.json")
-        if os.path.exists(creds_path):
-            os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
-        client = storage.Client()
-        bucket = client.bucket("contacts-refiner-data")
-        blob = bucket.blob("data/followup_scores.json")
-        blob.upload_from_filename(str(FOLLOWUP_SCORES_FILE))
-        logger.info("FollowUp: Scores uploaded to GCS")
-    except Exception as e:
-        logger.warning(f"FollowUp: GCS upload failed (non-fatal): {e}")
+    from utils import upload_file_to_gcs
+    upload_file_to_gcs(FOLLOWUP_SCORES_FILE, "data/followup_scores.json", "FollowUp")

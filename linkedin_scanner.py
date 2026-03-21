@@ -596,20 +596,5 @@ def parse_linkedin_activity(page_text: str) -> dict:
 
 def _upload_signals_to_gcs():
     """Upload linkedin_signals.json to GCS so the dashboard stays fresh."""
-    from config import ENVIRONMENT
-    if ENVIRONMENT == "cloud":
-        return  # GCS FUSE handles sync in cloud mode
-
-    try:
-        import os
-        from google.cloud import storage
-        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/dashboard-reader-key.json")
-        if os.path.exists(creds_path):
-            os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
-        client = storage.Client()
-        bucket = client.bucket("contacts-refiner-data")
-        blob = bucket.blob("data/linkedin_signals.json")
-        blob.upload_from_filename(str(SCAN_RESULTS_FILE))
-        logger.info("LinkedIn: Signals uploaded to GCS")
-    except Exception as e:
-        logger.warning(f"LinkedIn: GCS upload failed (non-fatal): {e}")
+    from utils import upload_file_to_gcs
+    upload_file_to_gcs(SCAN_RESULTS_FILE, "data/linkedin_signals.json", "LinkedIn")

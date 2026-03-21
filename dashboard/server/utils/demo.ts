@@ -196,6 +196,8 @@ export function maskFollowUpScore(score: FollowUpScore): FollowUpScore {
     linkedin: score.linkedin ? {
       ...score.linkedin,
       url: 'https://www.linkedin.com/in/***',
+      signal_text: score.linkedin.signal_text ? '[LinkedIn signal — hidden in demo]' : null,
+      headline: score.linkedin.headline ? '[Headline — hidden in demo]' : null,
     } : null,
     followup_prompt: score.followup_prompt ? '[Reconnect prompt — hidden in demo]' : null,
   }

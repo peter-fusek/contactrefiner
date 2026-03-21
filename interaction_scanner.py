@@ -1283,7 +1283,7 @@ class InteractionScanner:
                 # Insert after interaction block (if present) or at top
                 if INTERACTION_NOTE_MARKER in clean_note:
                     lines = clean_note.split("\n")
-                    insert_at = 0
+                    insert_at = len(lines)
                     in_interaction = False
                     for i, line in enumerate(lines):
                         if INTERACTION_NOTE_MARKER in line:

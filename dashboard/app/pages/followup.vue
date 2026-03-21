@@ -224,11 +224,12 @@ onUnmounted(() => clearInterval(interval))
                 <span class="text-[10px] text-neutral-600 font-mono tabular-nums w-6 shrink-0">#{{ score.rank }}</span>
                 <h3 class="font-semibold text-neutral-100 truncate">{{ score.name }}</h3>
                 <span
-                  v-if="signalBadge(score.linkedin?.signal_type)"
+                  v-for="badge in [signalBadge(score.linkedin?.signal_type)].filter(Boolean)"
+                  :key="badge!.label"
                   class="shrink-0 text-[10px] px-2 py-0.5 rounded-full border font-medium"
-                  :class="signalBadge(score.linkedin?.signal_type)!.bg + ' ' + signalBadge(score.linkedin?.signal_type)!.color"
+                  :class="badge!.bg + ' ' + badge!.color"
                 >
-                  {{ signalBadge(score.linkedin?.signal_type)!.label }}
+                  {{ badge!.label }}
                 </span>
               </div>
 
