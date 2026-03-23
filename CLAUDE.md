@@ -27,7 +27,7 @@
 
 ## Key Architecture
 - Pipeline phases: 0 (review feedback) → 1 (backup, analyze, fix HIGH) → 2 (AI review MEDIUM) → 3 (activity tagging) → 4 (FollowUp scoring)
-- Phase 4 gated by `ENABLE_FOLLOWUP_SCORING` env var (not yet enabled in Cloud Run)
+- Phase 4 gated by `ENABLE_FOLLOWUP_SCORING` env var (**enabled** in Cloud Run since 2026-03-23)
 - GCS is the message bus: workplan → analyze → queue → review → export → apply
 - Review sessions in `data/review_sessions/`, decisions in `data/review_decisions_*.json`
 - Feedback learning in `data/feedback.jsonl`
@@ -41,3 +41,6 @@
 - API sub-routes: use directory structure (e.g., `api/config/index.get.ts` + `api/config/pause.post.ts`)
 - Nuxt API routes with `isDemoMode()` guard for write endpoints
 - GCS upload: use `upload_file_to_gcs()` from `utils.py` — shared by linkedin_scanner and followup_scorer
+- Bug report: user-controlled screenshots only (paste/upload) — NEVER use DOM-scraping libraries (html2canvas etc.)
+- Bug report API: sanitize all user input, wrap text in code blocks, validate screenshot as image data URL
+- GITHUB_TOKEN on Render: fine-grained PAT, Issues RW only, scoped to repo, 90-day expiry
