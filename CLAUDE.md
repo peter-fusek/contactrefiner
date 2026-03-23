@@ -11,7 +11,7 @@
 ## Deploy
 - Render auto-deploys dashboard on push to main (~5min)
 - Cloud Build auto-deploys Cloud Run Job on push to main (~15min)
-- GA4 Measurement ID: `G-FP5LSJKP30` (in nuxt.config.ts head scripts)
+- GA4 Measurement ID: `G-QFW0D3J3KV` (in nuxt.config.ts head scripts)
 
 ## GCP Auth
 - gcloud auth opens Safari by default — must manually copy URL to Chrome (Chrome-only policy)
