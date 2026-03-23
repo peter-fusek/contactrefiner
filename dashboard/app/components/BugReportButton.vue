@@ -29,14 +29,6 @@ function onFileSelect(event: Event) {
   if (file?.type.startsWith('image/')) loadImageAsDataUrl(file)
 }
 
-function onBugClick() {
-  open.value = true
-}
-
-function removeScreenshot() {
-  pendingScreenshot.value = ''
-}
-
 function closeModal() {
   open.value = false
   description.value = ''
@@ -91,7 +83,7 @@ async function submit() {
   <button
     class="fixed bottom-4 right-4 z-50 size-10 flex items-center justify-center rounded-full bg-neutral-800 border border-neutral-700 text-neutral-400 hover:text-red-400 hover:border-red-500/40 hover:bg-red-500/10 transition-all duration-200 shadow-lg"
     title="Report a bug"
-    @click="onBugClick"
+    @click="open = true"
   >
     <UIcon name="i-lucide-bug" class="size-5" />
   </button>
@@ -120,7 +112,7 @@ async function submit() {
           <button
             class="absolute top-2 right-2 size-6 flex items-center justify-center rounded-full bg-neutral-900/80 text-neutral-400 hover:text-red-400 transition-colors"
             title="Remove screenshot"
-            @click="removeScreenshot"
+            @click="pendingScreenshot = ''"
           >
             <UIcon name="i-lucide-x" class="size-3.5" />
           </button>

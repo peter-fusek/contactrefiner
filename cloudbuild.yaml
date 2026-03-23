@@ -25,7 +25,7 @@ steps:
       - '${_IMAGE}'
       - '--region'
       - 'europe-west1'
-      - '--set-env-vars'
+      - '--update-env-vars'
       - 'ENABLE_FOLLOWUP_SCORING=true'
 
 substitutions:
