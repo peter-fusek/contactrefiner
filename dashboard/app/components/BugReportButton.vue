@@ -4,9 +4,12 @@ const description = ref('')
 const submitting = ref(false)
 const pendingScreenshot = ref('')
 const toast = useToast()
+const trimmedDescription = computed(() => description.value.trim())
 
-function onBugClick() {
-  open.value = true
+function loadImageAsDataUrl(blob: Blob) {
+  const reader = new FileReader()
+  reader.onload = () => { pendingScreenshot.value = reader.result as string }
+  reader.readAsDataURL(blob)
 }
 
 function onPaste(event: ClipboardEvent) {
@@ -16,52 +19,38 @@ function onPaste(event: ClipboardEvent) {
     if (item.type.startsWith('image/')) {
       event.preventDefault()
       const blob = item.getAsFile()
-      if (!blob) continue
-      const reader = new FileReader()
-      reader.onload = () => {
-        pendingScreenshot.value = reader.result as string
-      }
-      reader.readAsDataURL(blob)
-      break
+      if (blob) { loadImageAsDataUrl(blob); break }
     }
   }
 }
 
 function onFileSelect(event: Event) {
-  const input = event.target as HTMLInputElement
-  const file = input.files?.[0]
-  if (!file || !file.type.startsWith('image/')) return
-  const reader = new FileReader()
-  reader.onload = () => {
-    pendingScreenshot.value = reader.result as string
-  }
-  reader.readAsDataURL(file)
+  const file = (event.target as HTMLInputElement).files?.[0]
+  if (file?.type.startsWith('image/')) loadImageAsDataUrl(file)
 }
 
-function removeScreenshot() {
+function closeModal() {
+  open.value = false
+  description.value = ''
   pendingScreenshot.value = ''
 }
 
 async function submit() {
-  if (!description.value.trim()) return
+  if (!trimmedDescription.value) return
 
   submitting.value = true
   try {
-    const environment = {
-      url: window.location.href,
-      viewport: `${window.innerWidth}x${window.innerHeight}`,
-      userAgent: navigator.userAgent,
-      timestamp: new Date().toISOString(),
-    }
-
     const result = await $fetch<{ issueNumber: number, issueUrl: string }>('/api/bug-report', {
       method: 'POST',
       body: {
-        description: description.value.trim(),
+        description: trimmedDescription.value,
         pageUrl: window.location.href,
         screenshot: pendingScreenshot.value,
         pageState: { route: useRoute().fullPath, page: useRoute().name },
-        environment,
+        environment: {
+          viewport: `${window.innerWidth}x${window.innerHeight}`,
+          timestamp: new Date().toISOString(),
+        },
       },
     })
 
@@ -72,9 +61,7 @@ async function submit() {
       duration: 5000,
     })
 
-    open.value = false
-    description.value = ''
-    pendingScreenshot.value = ''
+    closeModal()
   }
   catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Failed to submit bug report'
@@ -161,13 +148,13 @@ async function submit() {
             <button
               class="px-3 py-1.5 text-sm rounded-lg text-neutral-400 hover:text-neutral-200 transition-colors"
               :disabled="submitting"
-              @click="open = false"
+              @click="closeModal"
             >
               Cancel
             </button>
             <button
               class="px-4 py-1.5 text-sm rounded-lg bg-red-500/20 border border-red-500/30 text-red-400 hover:bg-red-500/30 transition-colors disabled:opacity-40"
-              :disabled="!description.trim() || submitting"
+              :disabled="!trimmedDescription || submitting"
               @click="submit"
             >
               <span v-if="submitting" class="flex items-center gap-2">
