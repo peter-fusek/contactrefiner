@@ -10,7 +10,7 @@
 
 ## Deploy
 - Render auto-deploys dashboard on push to main (~5min)
-- Cloud Build auto-deploys Cloud Run Job on push to main (~15min)
+- Cloud Build auto-deploys Cloud Run Job on push to main (~15min); uses `--update-env-vars` (NOT `--set-env-vars` which wipes all vars)
 - GA4 Measurement ID: `G-QFW0D3J3KV` (in nuxt.config.ts head scripts)
 
 ## GCP Auth
