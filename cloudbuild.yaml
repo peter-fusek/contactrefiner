@@ -25,6 +25,8 @@ steps:
       - '${_IMAGE}'
       - '--region'
       - 'europe-west1'
+      - '--set-env-vars'
+      - 'ENABLE_FOLLOWUP_SCORING=true'
 
 substitutions:
   _IMAGE: 'europe-west1-docker.pkg.dev/${PROJECT_ID}/app/refiner:${SHORT_SHA}'

@@ -29,6 +29,14 @@ function onFileSelect(event: Event) {
   if (file?.type.startsWith('image/')) loadImageAsDataUrl(file)
 }
 
+function onBugClick() {
+  open.value = true
+}
+
+function removeScreenshot() {
+  pendingScreenshot.value = ''
+}
+
 function closeModal() {
   open.value = false
   description.value = ''
