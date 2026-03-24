@@ -1,7 +1,10 @@
 # Credentials and tokens (contain secrets / PII)
 credentials.json
 token*.json
-.env
+**/.env
+
+# macOS launchd (contains local paths)
+*.plist
 
 # Data directory (backups, workplans, changelogs — large, contain PII)
 data/

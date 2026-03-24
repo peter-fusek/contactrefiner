@@ -153,7 +153,7 @@ def send_email_digest(run_state: dict, start: datetime) -> bool:
         resend.api_key = api_key
         result = resend.Emails.send({
             "from": "Contact Refiner <noreply@contactrefiner.com>",
-            "to": ["peterfusek1980@gmail.com"],
+            "to": [os.getenv("NOTIFICATION_EMAIL", "")],
             "subject": subject,
             "text": body,
         })

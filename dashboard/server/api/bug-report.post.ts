@@ -2,6 +2,12 @@ const MAX_PAYLOAD_BYTES = 2 * 1024 * 1024 // 2 MB
 const MAX_DESCRIPTION_LENGTH = 2000
 
 export default defineEventHandler(async (event) => {
+  // Auth required — prevents anonymous spam of GitHub issues
+  const session = await getUserSession(event)
+  if (!session?.user) {
+    throw createError({ statusCode: 401, message: 'Authentication required' })
+  }
+
   const config = useRuntimeConfig()
   const githubToken = config.githubToken as string
   if (!githubToken) {
@@ -26,9 +32,8 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Description is required' })
   }
 
-  const repo = config.githubRepo as string || 'instarea-sk/google-contacts-refiner'
-  const session = await getUserSession(event)
-  const reporter = session?.user?.name || session?.user?.email || 'Anonymous (demo)'
+  const repo = config.githubRepo as string || 'peter-fusek/google-contacts-refiner'
+  const reporter = session.user?.name || session.user?.email || 'Authenticated user'
 
   // Sanitize inputs — user description and URL could contain anything
   const description = body.description.trim().slice(0, MAX_DESCRIPTION_LENGTH)

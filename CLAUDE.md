@@ -2,7 +2,7 @@
 
 ## Local Dev
 - Dashboard: `cd dashboard && GOOGLE_APPLICATION_CREDENTIALS=/tmp/dashboard-reader-key.json pnpm dev`
-- SA key may expire — restore with: `gcloud iam service-accounts keys create /tmp/dashboard-reader-key.json --iam-account=dashboard-reader@contacts-refiner.iam.gserviceaccount.com --project=contacts-refiner`
+- SA key may expire — restore with gcloud (see ops docs, not committed)
 - Python pipeline: `uv run python main.py analyze` / `uv run python main.py fix --auto`
 - Full Python CLI: `backup`, `analyze`, `fix`, `fix --auto`, `ai-review`, `followup`, `ltns`, `tag-activity`
 - Dashboard build: `cd dashboard && pnpm build` / `pnpm preview` (test prod locally)

@@ -280,7 +280,7 @@ def upload_file_to_gcs(local_path, blob_name: str, logger_prefix: str) -> None:
         if os.path.exists(creds_path):
             os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
         client = storage.Client()
-        bucket = client.bucket("contacts-refiner-data")
+        bucket = client.bucket(os.getenv("GCS_BUCKET", "contacts-refiner-data"))
         bucket.blob(blob_name).upload_from_filename(str(local_path))
         log.info(f"{logger_prefix}: Uploaded to GCS")
     except Exception as e:

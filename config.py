@@ -1,6 +1,7 @@
 """
 Configuration and constants for Google Contacts Cleanup tool.
 """
+import json
 import os
 import logging
 from pathlib import Path
@@ -603,9 +604,9 @@ GMAIL_SCOPES = ["https://www.googleapis.com/auth/gmail.readonly"]
 CALENDAR_SCOPES = ["https://www.googleapis.com/auth/calendar.readonly"]
 ACTIVITY_SCOPES = GMAIL_SCOPES + CALENDAR_SCOPES
 
-ACTIVITY_ACCOUNTS = [
-    {"email": "peterfusek1980@gmail.com", "token_file": "token_personal.json", "secret_name": None},
-    {"email": "peter.fusek@instarea.sk", "token_file": "token_work.json", "secret_name": "work-gmail-refresh-token"},
+ACTIVITY_ACCOUNTS = json.loads(os.getenv("ACTIVITY_ACCOUNTS", "[]")) or [
+    {"email": os.getenv("OWNER_EMAIL_PERSONAL", ""), "token_file": "token_personal.json", "secret_name": None},
+    {"email": os.getenv("OWNER_EMAIL_WORK", ""), "token_file": "token_work.json", "secret_name": "work-gmail-refresh-token"},
 ]
 
 # Owner emails — used to detect when the authenticated user's email
