@@ -4,7 +4,7 @@ definePageMeta({ layout: false })
 useHead({
   title: 'Contact Refiner — AI-Powered Google Contacts Cleanup',
   meta: [
-    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, 22,000+ changes applied, 144 LinkedIn signals, daily automated pipeline, AI review, and a dashboard to approve every change.' },
+    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, 22,000+ changes applied, 164 LinkedIn signals, daily automated pipeline, AI review, and a dashboard to approve every change.' },
     { property: 'og:title', content: 'Contact Refiner — AI-Powered Google Contacts Cleanup' },
     { property: 'og:description', content: 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. AI-powered analysis with human review.' },
     { property: 'og:type', content: 'website' },
@@ -46,7 +46,7 @@ useHead({
             'applicationCategory': 'BusinessApplication',
             'operatingSystem': 'Web',
             'url': 'https://contactrefiner.com',
-            'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. 22,000+ changes applied across 5,500+ contacts. 144 LinkedIn signals. AI-powered analysis with human review and daily email digest.',
+            'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. 22,000+ changes applied across 5,500+ contacts. 164 LinkedIn signals. AI-powered analysis with human review and daily email digest.',
             'offers': {
               '@type': 'Offer',
               'price': '0',
@@ -89,7 +89,7 @@ const features = [
   {
     icon: 'i-lucide-radar',
     title: 'LinkedIn Social Signals',
-    description: 'Scans LinkedIn profiles to detect job changes and reconnection opportunities. 67% job change rate across 144 contacts.',
+    description: 'Scans LinkedIn profiles to detect job changes and reconnection opportunities. 63% job change rate across 164 contacts.',
     color: 'text-blue-400',
   },
   {
@@ -158,7 +158,7 @@ const steps = [
       <div class="max-w-3xl mx-auto text-center space-y-6">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-800 bg-neutral-900/50 text-xs text-neutral-400">
           <span class="size-1.5 rounded-full bg-primary-400 animate-pulse-glow" />
-          Open source · Security audited · 22,000+ changes · 144 LinkedIn signals
+          Open source · Security audited · 22,000+ changes · 164 LinkedIn signals
         </div>
 
         <h1 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-100 leading-tight">
@@ -218,7 +218,7 @@ const steps = [
             <div class="mt-2 text-neutral-500">$ python main.py fix --auto</div>
             <div class="text-primary-400">  Applied 2,140 changes in 28s</div>
             <div class="mt-2 text-neutral-500">$ python main.py linkedin-scan</div>
-            <div class="text-cyan-400">  144 profiles scanned → 96 job changes (67%)</div>
+            <div class="text-cyan-400">  164 profiles scanned → 103 job changes (63%)</div>
             <div class="mt-2 text-neutral-600">
               # Review at https://contactrefiner.com/review<br>
               # Signals at https://contactrefiner.com/social-signals
@@ -244,7 +244,7 @@ const steps = [
           <div class="label-refined mt-1">Contacts managed</div>
         </div>
         <div>
-          <div class="text-2xl md:text-3xl font-bold text-cyan-400 tabular-nums">144</div>
+          <div class="text-2xl md:text-3xl font-bold text-cyan-400 tabular-nums">164</div>
           <div class="label-refined mt-1">LinkedIn signals</div>
         </div>
         <div>
