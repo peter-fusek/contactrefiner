@@ -126,7 +126,7 @@ class CodeTableManager:
     def _coerce(self, entries, table_type: str):
         """Coerce entries to the expected Python type."""
         if table_type == "set":
-            return set(entries) if isinstance(entries, list) else set(entries)
+            return set(entries)
         if table_type == "list":
             return list(entries) if not isinstance(entries, list) else entries
         if table_type == "dict" or table_type == "dict_of_lists":
@@ -205,9 +205,8 @@ class CodeTableManager:
             merged.sort()
         else:
             merged = {**seed_entries, **new_entries}
-            for k in add_entries:
-                if isinstance(add_entries, dict):
-                    merged.update(add_entries)
+            if isinstance(add_entries, dict):
+                merged.update(add_entries)
             for k in remove_entries:
                 merged.pop(k, None)
 
