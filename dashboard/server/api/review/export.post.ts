@@ -25,6 +25,9 @@ export default defineEventHandler(async (event) => {
   // Use the session's own review file — NOT the latest one.
   // If a new pipeline run created a newer review file, the changeIds won't match
   // and all decisions would be silently dropped.
+  if (!session.reviewFilePath) {
+    console.warn(`[export] Session ${session.id} has no reviewFilePath — falling back to latest. Decisions may be mismatched.`)
+  }
   const reviewFile = session.reviewFilePath
     ? await getReviewFile(session.reviewFilePath)
     : await getLatestReviewFile()

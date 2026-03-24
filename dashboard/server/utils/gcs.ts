@@ -255,17 +255,11 @@ export async function getReviewFile(path: string): Promise<{ path: string; data:
 }
 
 export async function getSessionForReviewFile(reviewFilePath: string): Promise<ReviewSession | null> {
-  // Find the session that matches this specific review file (not just the latest session)
-  const paths = await findAllFiles('data/review_sessions/', '.json')
-  // Sort newest first so we find the most recent matching session
-  paths.sort((a, b) => b.localeCompare(a))
-  for (const p of paths) {
-    const session = await readJson<ReviewSession>(p)
-    if (session?.reviewFilePath === reviewFilePath && Object.keys(session.decisions || {}).length > 0) {
-      return session
-    }
-  }
-  return null
+  // Reuse getAllReviewSessions (cached, parallel reads) instead of N+1 sequential GCS reads
+  const sessions = await getAllReviewSessions()
+  return sessions.find(
+    s => s.reviewFilePath === reviewFilePath && Object.keys(s.decisions || {}).length > 0,
+  ) ?? null
 }
 
 export async function getReviewSession(sessionId: string): Promise<ReviewSession | null> {

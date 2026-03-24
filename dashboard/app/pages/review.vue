@@ -299,33 +299,32 @@ function scheduleAutoSave() {
   autoSaveTimer = setTimeout(() => saveToGCS(), 1_000)
 }
 
+function buildChangeMeta() {
+  const meta: Record<string, { ruleCategory: string; field: string; old: string; suggested: string; confidence: number }> = {}
+  for (const c of allChanges.value) {
+    if (decisions.value[c.id]) {
+      meta[c.id] = { ruleCategory: c.ruleCategory, field: c.field, old: c.old, suggested: c.new, confidence: c.confidence }
+    }
+  }
+  return meta
+}
+
+function buildSavePayload() {
+  return {
+    sessionId: sessionId.value,
+    reviewFilePath: data.value?.reviewFilePath,
+    decisions: Object.values(decisions.value),
+    changeMeta: buildChangeMeta(),
+  }
+}
+
 async function saveToGCS() {
   if (isSaving.value || !Object.keys(decisions.value).length) return
   isSaving.value = true
   try {
-    // Build change metadata for feedback
-    const changeMeta: Record<string, { ruleCategory: string; field: string; old: string; suggested: string; confidence: number }> = {}
-    for (const c of allChanges.value) {
-      if (decisions.value[c.id]) {
-        changeMeta[c.id] = {
-          ruleCategory: c.ruleCategory,
-          field: c.field,
-          old: c.old,
-          suggested: c.new,
-          confidence: c.confidence,
-        }
-      }
-    }
-
-    const allDecisions = Object.values(decisions.value)
     await $fetch('/api/review/decide', {
       method: 'POST',
-      body: {
-        sessionId: sessionId.value,
-        reviewFilePath: data.value?.reviewFilePath,
-        decisions: allDecisions,
-        changeMeta,
-      },
+      body: buildSavePayload(),
     })
     lastSaved.value = new Date().toLocaleTimeString()
     saveError.value = null
@@ -334,6 +333,7 @@ async function saveToGCS() {
     saveError.value = 'Failed to save. Check your connection.'
   } finally {
     isSaving.value = false
+    autoSaveTimer = undefined
   }
 }
 
@@ -429,19 +429,9 @@ function handleKeydown(e: KeyboardEvent) {
 // Flush unsaved decisions when navigating away or closing tab
 function handleBeforeUnload() {
   if (autoSaveTimer && Object.keys(decisions.value).length) {
-    // Use sendBeacon for reliable delivery on tab close
-    const changeMeta: Record<string, { ruleCategory: string; field: string; old: string; suggested: string; confidence: number }> = {}
-    for (const c of allChanges.value) {
-      if (decisions.value[c.id]) {
-        changeMeta[c.id] = { ruleCategory: c.ruleCategory, field: c.field, old: c.old, suggested: c.new, confidence: c.confidence }
-      }
-    }
-    navigator.sendBeacon('/api/review/decide', new Blob([JSON.stringify({
-      sessionId: sessionId.value,
-      reviewFilePath: data.value?.reviewFilePath,
-      decisions: Object.values(decisions.value),
-      changeMeta,
-    })], { type: 'application/json' }))
+    navigator.sendBeacon('/api/review/decide', new Blob([
+      JSON.stringify(buildSavePayload()),
+    ], { type: 'application/json' }))
   }
 }
 
@@ -455,7 +445,7 @@ onUnmounted(() => {
   window.removeEventListener('beforeunload', handleBeforeUnload)
   if (autoSaveTimer) {
     clearTimeout(autoSaveTimer)
-    saveToGCS() // flush on SPA navigation
+    handleBeforeUnload() // sendBeacon survives component teardown
   }
 })
 

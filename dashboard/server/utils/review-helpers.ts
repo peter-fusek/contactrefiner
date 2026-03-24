@@ -39,11 +39,9 @@ export function extractRuleCategory(reason: string): string {
   return 'other'
 }
 
-export function makeChangeId(resourceName: string, field: string, _oldVal: string, newVal: string): string {
-  // Exclude oldVal from hash — it changes between re-analyses (e.g. contact name
-  // updates) which orphans all prior review decisions. newVal is the proposed change
-  // and is stable across pipeline runs. resourceName|field|newVal is unique enough
-  // (and handles multiple changes on same field like phoneNumbers[+]).
+// oldVal intentionally excluded — it changes between pipeline re-analyses,
+// orphaning prior review decisions. resourceName|field|newVal is stable and unique.
+export function makeChangeId(resourceName: string, field: string, newVal: string): string {
   return createHash('sha256')
     .update(`${resourceName}|${field}|${newVal}`)
     .digest('hex')
@@ -77,7 +75,7 @@ export function parseReviewFile(data: unknown): ReviewChange[] {
   for (const item of file.items) {
     for (const change of item.skipped_changes ?? []) {
       changes.push({
-        id: makeChangeId(item.resourceName, change.field, change.old, change.new),
+        id: makeChangeId(item.resourceName, change.field, change.new),
         resourceName: item.resourceName,
         displayName: item.displayName,
         field: change.field,
