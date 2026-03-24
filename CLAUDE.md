@@ -30,6 +30,9 @@
 - Phase 4 gated by `ENABLE_FOLLOWUP_SCORING` env var (**enabled** in Cloud Run since 2026-03-23)
 - GCS is the message bus: workplan → analyze → queue → review → export → apply
 - Review sessions in `data/review_sessions/`, decisions in `data/review_decisions_*.json`
+- Review changeIds: hash `resourceName|field|newVal` only (NOT oldVal — it changes between re-analyses)
+- Review session matching: `getSessionForReviewFile()` finds session by `reviewFilePath`, not just latest
+- Review auto-save: 1s debounce + `sendBeacon` on `beforeunload` for reliable persistence
 - Feedback learning in `data/feedback.jsonl`
 - `readJson` returns null ONLY on 404 — throws for all other GCS errors (auth, permissions, etc.)
 - Emergency stop: `data/pipeline_paused.json` (written by dashboard, checked by entrypoint.py)
