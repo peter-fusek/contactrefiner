@@ -207,12 +207,16 @@ class MemoryManager:
         self._dirty = True
 
     def _record_rejected_specific(self, resource_name: str, field: str, new_value: str):
-        """Record a specific rejection in the blocklist."""
+        """Record a specific rejection in the blocklist (capped at 500 contacts)."""
         blocklist = self.memory.setdefault("rejected_specifics", {})
         contact = blocklist.setdefault(resource_name, {})
         values = contact.setdefault(field, [])
         if new_value not in values:
             values.append(new_value)
+        # Cap blocklist size: evict oldest contacts if over 500
+        if len(blocklist) > 500:
+            oldest = next(iter(blocklist))
+            del blocklist[oldest]
         self._dirty = True
 
     def is_rejected_specific(self, resource_name: str, field: str, new_value: str) -> bool:

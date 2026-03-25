@@ -93,18 +93,21 @@ def load_pipeline_config_overrides():
         with open(config_path, encoding="utf-8") as f:
             overrides = json.load(f)
 
+        def _clamp(val, lo, hi):
+            return max(lo, min(hi, val))
+
         if "batchSize" in overrides:
-            BATCH_SIZE = int(overrides["batchSize"])
+            BATCH_SIZE = _clamp(int(overrides["batchSize"]), 10, 500)
         if "confidenceHigh" in overrides:
-            CONFIDENCE_HIGH = float(overrides["confidenceHigh"])
+            CONFIDENCE_HIGH = _clamp(float(overrides["confidenceHigh"]), 0.50, 1.00)
         if "confidenceMedium" in overrides:
-            CONFIDENCE_MEDIUM = float(overrides["confidenceMedium"])
+            CONFIDENCE_MEDIUM = _clamp(float(overrides["confidenceMedium"]), 0.30, 0.99)
         if "aiCostLimit" in overrides:
-            AI_COST_LIMIT_PER_SESSION = float(overrides["aiCostLimit"])
+            AI_COST_LIMIT_PER_SESSION = _clamp(float(overrides["aiCostLimit"]), 0.10, 50.00)
         if "autoThreshold" in overrides:
-            AUTO_CONFIDENCE_THRESHOLD = float(overrides["autoThreshold"])
+            AUTO_CONFIDENCE_THRESHOLD = _clamp(float(overrides["autoThreshold"]), 0.50, 1.00)
         if "autoMaxChanges" in overrides:
-            AUTO_MAX_CHANGES_PER_RUN = int(overrides["autoMaxChanges"])
+            AUTO_MAX_CHANGES_PER_RUN = _clamp(int(overrides["autoMaxChanges"]), 1, 1000)
 
         _logger.info("Loaded pipeline config overrides from %s", config_path)
     except Exception as e:
