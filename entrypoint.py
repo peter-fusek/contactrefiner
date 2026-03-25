@@ -216,6 +216,12 @@ def _process_review_feedback():
 
                 # Skip changes with missing metadata (unmatched changeIds)
                 if not change.get("field") and not change.get("reason"):
+                    if decision in ("approved", "edited", "rejected"):
+                        logger.warning(
+                            "Phase 0: Dropping %s decision (changeId %s) — metadata missing "
+                            "(likely changeId mismatch between runs)",
+                            decision, change.get("changeId", "?")
+                        )
                     continue
 
                 # Collect feedback for memory learning (approvals, edits, AND rejections)
@@ -229,6 +235,7 @@ def _process_review_feedback():
                         "suggested": change.get("new") or "",
                         "finalValue": change.get("editedValue") or change.get("new") or "",
                         "confidence": change.get("confidence", 0),
+                        "resourceName": resource_name or "",
                     })
 
                     # Collect approved/edited for API application (not rejections)

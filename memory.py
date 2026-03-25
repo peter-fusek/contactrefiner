@@ -41,7 +41,10 @@ RULE_CATEGORIES = {
     "family_name_fix": r"family.*name|familyName",
     "x500_dn": r"X\.500 DN",
     "org_from_email": r"inferred from email|organization.*email",
-    "event_from_note": r"from notes|extracted from notes",
+    "phone_from_note": r"phone.*(?:found in|from) notes|phone.*extracted from notes",
+    "email_from_note": r"email.*(?:found in|from) notes|email.*extracted from notes",
+    "url_from_note": r"(?:URL|url|website).*(?:found in|from) notes|URL.*extracted from notes",
+    "event_from_note": r"(?:birthday|anniversary|date|event).*(?:found in|from) notes|(?:from|extracted from) notes",
     "owner_email": r"owner email",
     "corporate_url": r"corporate.*(?:LinkedIn|website|directory|social media)",
     "shared_address": r"shared HQ|shared.*office.*address",
@@ -69,12 +72,13 @@ _RULE_STATS_MIGRATION = {
 
 # Default empty memory structure
 _DEFAULT_MEMORY = {
-    "version": "1.1",
+    "version": "1.2",
     "last_updated": None,
     "diacritics_corrections": {},
     "merge_decisions": {},
     "enrichment_patterns": {"domain_to_org": {}},
     "rejected_changes": [],
+    "rejected_specifics": {},  # {resourceName: {field: [newValue, ...]}}
     "session_history": [],
     "rule_stats": {},
 }
@@ -183,17 +187,39 @@ class MemoryManager:
             if old_val and new_val:
                 self._record_diacritics(old_val, new_val, approved=False)
 
+        # Record per-contact blocklist entry if resourceName is available
+        resource_name = change.get("resourceName", "")
+        new_val = change.get("new", "")
+        if resource_name and field and new_val:
+            self._record_rejected_specific(resource_name, field, new_val)
+
         # Record all rejections for context
         self.memory.setdefault("rejected_changes", []).append({
             "field": field,
-            "rejected_value": change.get("new", ""),
+            "rejected_value": new_val,
             "kept_value": change.get("old", ""),
             "reason": reason,
+            "resourceName": resource_name,
             "date": datetime.now().isoformat(),
         })
         # Keep only last 100 rejections
         self.memory["rejected_changes"] = self.memory["rejected_changes"][-100:]
         self._dirty = True
+
+    def _record_rejected_specific(self, resource_name: str, field: str, new_value: str):
+        """Record a specific rejection in the blocklist."""
+        blocklist = self.memory.setdefault("rejected_specifics", {})
+        contact = blocklist.setdefault(resource_name, {})
+        values = contact.setdefault(field, [])
+        if new_value not in values:
+            values.append(new_value)
+        self._dirty = True
+
+    def is_rejected_specific(self, resource_name: str, field: str, new_value: str) -> bool:
+        """Check if a specific (contact, field, value) triple was previously rejected."""
+        blocklist = self.memory.get("rejected_specifics", {})
+        contact = blocklist.get(resource_name, {})
+        return new_value in contact.get(field, [])
 
     def merge_learnings(self, learnings: list[dict]):
         """Merge AI-generated learnings into memory."""
@@ -232,6 +258,7 @@ class MemoryManager:
           - suggested: str
           - finalValue: str
           - confidence: float
+          - resourceName: str (optional, needed for per-contact blocklist)
         """
         rule_stats = self.memory.setdefault("rule_stats", {})
 
@@ -258,6 +285,7 @@ class MemoryManager:
                     "old": d.get("old", ""),
                     "new": d.get("suggested", ""),
                     "reason": d.get("ruleCategory", ""),
+                    "resourceName": d.get("resourceName", ""),
                 })
             elif dtype == "edit":
                 stats["edited"] = stats.get("edited", 0) + 1
@@ -422,6 +450,15 @@ class MemoryManager:
             for sub in ("diacritics_given", "diacritics_family"):
                 if sub not in rule_stats:
                     rule_stats[sub] = dict(diac)  # copy stats as seed
+                    migrated = True
+
+        # Seed note-extraction sub-categories from the old "event_from_note" bucket
+        # so they inherit learned confidence until they accumulate own feedback.
+        efn = rule_stats.get("event_from_note")
+        if efn and efn.get("adjusted_confidence"):
+            for sub in ("phone_from_note", "email_from_note", "url_from_note"):
+                if sub not in rule_stats:
+                    rule_stats[sub] = dict(efn)  # copy stats as seed
                     migrated = True
 
         return migrated

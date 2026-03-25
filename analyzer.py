@@ -29,23 +29,36 @@ def _get_memory():
     return _memory
 
 
-def _adjust_confidence(changes: list[dict]) -> list[dict]:
-    """Adjust confidence scores based on user feedback history."""
+def _adjust_confidence(changes: list[dict], resource_name: str = "") -> list[dict]:
+    """Adjust confidence scores based on user feedback history.
+
+    Also filters out changes that were previously rejected for this specific
+    contact (per-contact blocklist).
+    """
     memory = _get_memory()
     if not memory:
         return changes
 
+    filtered = []
     for change in changes:
+        # Check per-contact rejection blocklist
+        if resource_name and memory.is_rejected_specific(
+            resource_name, change.get("field", ""), change.get("new", "")
+        ):
+            continue  # Suppressed — user previously rejected this exact change
+
         category = memory.extract_rule_category(change.get("reason", ""))
         base = change["confidence"]
         # Memory-learned corrections (0.97) are user-approved individual items —
         # don't let category-level confidence downgrade them.
         if base >= 0.97:
+            filtered.append(change)
             continue
         adjusted = memory.get_adjusted_confidence(category, base)
         if adjusted != base:
             change["confidence"] = adjusted
-    return changes
+        filtered.append(change)
+    return filtered
 
 
 def _flag_deletion_candidate(person: dict) -> list[dict]:
@@ -204,8 +217,8 @@ def analyze_contact(person: dict, ai_analyzer=None, shared_address_index: dict =
         )
     ]
 
-    # Adjust confidence based on user feedback history
-    changes = _adjust_confidence(changes)
+    # Adjust confidence based on user feedback history + filter blocklisted rejections
+    changes = _adjust_confidence(changes, resource_name=get_resource_name(person))
 
     # AI enhancement pass (if available and needed)
     if ai_analyzer and ai_analyzer.needs_ai_review(changes):
