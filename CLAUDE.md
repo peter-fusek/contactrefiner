@@ -17,7 +17,7 @@
 - gcloud auth opens Safari by default — must manually copy URL to Chrome (Chrome-only policy)
 - GCS SA role: needs **Object Admin** (not Object Creator) for file overwrites
 - Cloud Run Job name: `contacts-refiner` (NOT `contacts-refiner-job`)
-- Cloud Build auto-deploys on push to main, takes ~15min — don't trigger job immediately after push
+- Cloud Build auto-deploys on push to main, takes ~3min — don't trigger Cloud Run Job immediately after push
 
 ## Code Conventions
 - All system text in English — rules, reasons, logs, errors, git messages
