@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: contacts-refiner-dashboard
+    name: contactrefiner-dashboard
     runtime: node
     region: frankfurt
     plan: free

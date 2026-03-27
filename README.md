@@ -1,4 +1,4 @@
-# Google Contacts Refiner
+# ContactRefiner
 
 Automated Google Contacts cleaner — SK/CZ diacritics, phone normalization, deduplication, AI-powered analysis (Claude), learning memory, daily Cloud Run scheduling, and a review dashboard.
 
@@ -50,8 +50,8 @@ Built with Nuxt 4, Nuxt UI 4, and Tailwind CSS 4.2. Hosted on Render.
 
 ```bash
 # Clone
-git clone https://github.com/peter-fusek/google-contacts-refiner.git
-cd google-contacts-refiner
+git clone https://github.com/peter-fusek/contactrefiner.git
+cd contactrefiner
 
 # Virtual environment
 python3 -m venv .venv
