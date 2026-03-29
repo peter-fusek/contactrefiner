@@ -38,11 +38,12 @@
 - Emergency stop: `data/pipeline_paused.json` (written by dashboard, checked by entrypoint.py)
 
 ## Dashboard Patterns
-- Name resolution: `getContactNameMap()` in gcs.ts — resolves resourceName → displayName from workplan + LinkedIn signals
+- Name resolution: `getContactNameMap()` in gcs.ts — resolves resourceName → displayName from workplan + LinkedIn signals; changelog.get.ts also enriches inline from changelog `names[0].displayName` entries
 - Cache: 60s TTL in-memory Map; `clearCache()` exposed via POST /api/cache-clear
 - Demo masking: `demo.ts` — must handle ALL PII fields including `field === 'contact'` (tobedeleted names)
 - API sub-routes: use directory structure (e.g., `api/config/index.get.ts` + `api/config/pause.post.ts`)
 - Nuxt API routes: ALL endpoints need `isDemoMode()` guard (repo is public, unauthenticated users get empty data)
+- Nav order: Status, Review, Social Signals, FollowUp, Changelog, Runs, Pipeline, Config (Analytics removed from nav, page still exists at /analytics)
 - Security headers: X-Frame-Options DENY, X-Content-Type-Options nosniff via nitro routeRules
 - GCS upload: use `upload_file_to_gcs()` from `utils.py` — shared by linkedin_scanner and followup_scorer
 - Bug report: user-controlled screenshots only (paste/upload) — NEVER use DOM-scraping libraries (html2canvas etc.)
