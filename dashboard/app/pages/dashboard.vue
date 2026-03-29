@@ -69,7 +69,7 @@ function formatTime(iso: string | null) {
     </div>
 
     <!-- Pipeline Diagram -->
-    <div v-if="fetchStatus !== 'pending'" class="rounded-xl border border-neutral-800 bg-neutral-900/50 p-5 overflow-x-auto">
+    <NuxtLink v-if="fetchStatus !== 'pending'" to="/pipeline" class="block rounded-xl border border-neutral-800 bg-neutral-900/50 p-5 overflow-x-auto hover:border-neutral-700 transition-colors cursor-pointer">
       <p class="text-xs uppercase tracking-wider text-neutral-500 mb-3">
         Pipeline
       </p>
@@ -77,7 +77,7 @@ function formatTime(iso: string | null) {
         :phase="status?.phase ?? 'idle'"
         :status="status?.status ?? 'idle'"
       />
-    </div>
+    </NuxtLink>
 
     <!-- Progress Bars -->
     <div v-if="fetchStatus !== 'pending'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -104,24 +104,28 @@ function formatTime(iso: string | null) {
         :value="status?.lastRun.changesApplied ?? 0"
         icon="i-lucide-check-circle"
         color="green"
+        to="/changelog"
       />
       <StatsCard
         label="Failed"
         :value="status?.lastRun.changesFailed ?? 0"
         icon="i-lucide-x-circle"
         color="red"
+        to="/runs"
       />
       <StatsCard
         label="Duration"
         :value="formatDuration(status?.lastRun.duration ?? null)"
         icon="i-lucide-clock"
         color="cyan"
+        to="/runs"
       />
       <StatsCard
         label="Cost"
         :value="status?.lastRun.cost ? `$${status.lastRun.cost}` : '--'"
         icon="i-lucide-dollar-sign"
         color="amber"
+        to="/runs"
       />
     </div>
 

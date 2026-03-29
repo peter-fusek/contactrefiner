@@ -417,6 +417,14 @@ export async function getContactNameMap(): Promise<Map<string, string>> {
       }
     }
 
+    // Source 3: changelog entries (names changed by the pipeline)
+    const changelog = await getChangelog()
+    for (const entry of changelog) {
+      if (!map.has(entry.resourceName) && entry.field === 'names[0].displayName' && entry.new) {
+        map.set(entry.resourceName, entry.new)
+      }
+    }
+
     return map
   }) as Promise<Map<string, string>>
 }

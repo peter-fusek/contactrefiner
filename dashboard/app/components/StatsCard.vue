@@ -1,21 +1,27 @@
 <script setup lang="ts">
-defineProps<{
+const props = defineProps<{
   label: string
   value: string | number
   icon?: string
   color?: 'green' | 'amber' | 'cyan' | 'red'
+  to?: string
 }>()
 </script>
 
 <template>
-  <div
-    class="rounded-xl border border-neutral-800 bg-neutral-900/50 p-5 relative overflow-hidden scanlines card-hover"
-    :class="{
-      'glow-green': color === 'green',
-      'glow-amber': color === 'amber',
-      'glow-cyan': color === 'cyan',
-      'glow-red': color === 'red',
-    }"
+  <component
+    :is="to ? resolveComponent('NuxtLink') : 'div'"
+    :to="to"
+    class="block rounded-xl border border-neutral-800 bg-neutral-900/50 p-5 relative overflow-hidden scanlines card-hover"
+    :class="[
+      to ? 'cursor-pointer hover:border-neutral-700 transition-colors' : '',
+      {
+        'glow-green': color === 'green',
+        'glow-amber': color === 'amber',
+        'glow-cyan': color === 'cyan',
+        'glow-red': color === 'red',
+      },
+    ]"
   >
     <div class="flex items-start justify-between relative z-10">
       <div>
@@ -41,5 +47,5 @@ defineProps<{
       </div>
     </div>
     <slot />
-  </div>
+  </component>
 </template>

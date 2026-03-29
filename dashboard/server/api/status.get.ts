@@ -4,7 +4,7 @@ import {
   getAIReviewCheckpoint,
   getChangelogWithMarkers,
   isBatchMarker,
-  estimateAICost,
+  getPipelineRuns,
 } from '../utils/gcs'
 import { isDemoMode } from '../utils/demo'
 
@@ -18,10 +18,11 @@ export default defineEventHandler(async (event): Promise<StatusResponse> => {
       aiReview: null,
     }
   }
-  const [checkpoint, aiCheckpoint, changelog] = await Promise.all([
+  const [checkpoint, aiCheckpoint, changelog, pipelineRuns] = await Promise.all([
     getCheckpoint(),
     getAIReviewCheckpoint(),
     getChangelogWithMarkers(),
+    getPipelineRuns(),
   ])
 
   // Determine phase and status
@@ -67,7 +68,16 @@ export default defineEventHandler(async (event): Promise<StatusResponse> => {
     )
   }
 
-  const estimatedCost = estimateAICost(aiCheckpoint?.last_reviewed ?? 0)
+  // Get actual cost from latest pipeline run (sum of all phases)
+  const latestRun = pipelineRuns.length ? pipelineRuns[pipelineRuns.length - 1] : null
+  let totalCost: number | null = null
+  if (latestRun?.phases) {
+    let sum = 0
+    for (const phase of Object.values(latestRun.phases)) {
+      if (phase.ai_cost_usd) sum += phase.ai_cost_usd
+    }
+    if (sum > 0) totalCost = Math.round(sum * 1000) / 1000
+  }
 
   return {
     status,
@@ -83,7 +93,7 @@ export default defineEventHandler(async (event): Promise<StatusResponse> => {
       duration,
       changesApplied,
       changesFailed,
-      cost: estimatedCost > 0 ? Math.round(estimatedCost * 100) / 100 : null,
+      cost: totalCost,
     },
     aiReview: aiCheckpoint
       ? {
