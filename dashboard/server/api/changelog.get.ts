@@ -56,6 +56,13 @@ export default defineEventHandler(async (event): Promise<GroupedChangelogRespons
     entries = entries.filter(e => e.confidence === confidence)
   }
 
+  // Enrich nameMap from changelog entries (covers contacts not in workplan/LinkedIn)
+  for (const e of entries) {
+    if (!nameMap.has(e.resourceName) && e.field === 'names[0].displayName' && e.new) {
+      nameMap.set(e.resourceName, e.new)
+    }
+  }
+
   // Group by contact
   const groupMap = new Map<string, ContactGroup>()
   for (const e of entries) {

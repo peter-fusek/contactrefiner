@@ -73,8 +73,8 @@ export default defineEventHandler(async (event): Promise<StatusResponse> => {
   let totalCost: number | null = null
   if (latestRun?.phases) {
     let sum = 0
-    for (const phase of Object.values(latestRun.phases)) {
-      if (phase.ai_cost_usd) sum += phase.ai_cost_usd
+    for (const phaseDetail of Object.values(latestRun.phases)) {
+      if (phaseDetail.ai_cost_usd) sum += phaseDetail.ai_cost_usd
     }
     if (sum > 0) totalCost = Math.round(sum * 1000) / 1000
   }
