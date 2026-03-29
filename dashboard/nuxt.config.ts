@@ -57,6 +57,8 @@ export default defineNuxtConfig({
 
   nitro: {
     routeRules: {
+      '/social-signals': { redirect: { to: '/crm', statusCode: 301 } },
+      '/followup': { redirect: { to: '/crm', statusCode: 301 } },
       '/**': {
         headers: {
           'X-Frame-Options': 'DENY',

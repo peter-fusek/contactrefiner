@@ -327,3 +327,40 @@ export interface ConfigResponse {
   environment: string
   schedulerStatus: string
 }
+
+// --- CRM ---
+
+export type CRMStage = 'inbox' | 'reached_out' | 'in_conversation' | 'opportunity' | 'converted' | 'dormant'
+
+export interface CRMContactState {
+  stage: CRMStage
+  stageChangedAt: string
+  notes: string
+  tags: string[]
+}
+
+export interface CRMState {
+  version: 1
+  updatedAt: string
+  contacts: Record<string, CRMContactState>
+}
+
+export interface CRMContact {
+  resourceName: string
+  name: string
+  stage: CRMStage
+  stageChangedAt: string
+  notes: string
+  tags: string[]
+  score_total: number
+  score_breakdown: FollowUpScore['score_breakdown']
+  interaction: FollowUpScore['interaction']
+  linkedin: FollowUpScore['linkedin']
+  contact: FollowUpScore['contact']
+  followup_prompt: string | null
+}
+
+export interface CRMResponse {
+  contacts: CRMContact[]
+  stages: Record<CRMStage, number>
+}

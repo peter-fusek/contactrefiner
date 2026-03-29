@@ -8,8 +8,7 @@ const sidebarOpen = ref(false)
 const navItems = [
   { label: 'Status', icon: 'i-lucide-activity', to: '/dashboard' },
   { label: 'Review', icon: 'i-lucide-check-circle', to: '/review', highlight: true },
-  { label: 'Social Signals', icon: 'i-lucide-radar', to: '/social-signals' },
-  { label: 'FollowUp', icon: 'i-lucide-user-round-check', to: '/followup' },
+  { label: 'CRM', icon: 'i-lucide-kanban', to: '/crm' },
   { label: 'Changelog', icon: 'i-lucide-file-diff', to: '/changelog' },
   { label: 'Runs', icon: 'i-lucide-play-circle', to: '/runs' },
   { label: 'Pipeline', icon: 'i-lucide-workflow', to: '/pipeline' },
