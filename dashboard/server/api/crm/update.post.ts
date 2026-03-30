@@ -2,7 +2,7 @@ import type { CRMStage } from '../../utils/types'
 import { getCRMState, saveCRMState } from '../../utils/gcs'
 import { isDemoMode } from '../../utils/demo'
 
-const VALID_STAGES: CRMStage[] = ['inbox', 'reached_out', 'in_conversation', 'opportunity', 'converted', 'dormant']
+const VALID_STAGES: CRMStage[] = ['inbox', 'reached_out', 'in_conversation', 'opportunity', 'converted', 'dormant', 'unknown', 'ready_to_delete']
 
 export default defineEventHandler(async (event) => {
   if (await isDemoMode(event)) {

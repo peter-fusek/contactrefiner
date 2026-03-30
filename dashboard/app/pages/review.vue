@@ -77,6 +77,11 @@ watch(data, (d) => {
       }
     } catch (e) { console.warn('[Review] Failed to restore session from localStorage:', e) }
   }
+
+  // Auto-hide decided items when returning to a session that already has decisions
+  if (Object.keys(decisions.value).length > 0) {
+    hideDecided.value = true
+  }
 }, { immediate: true })
 
 // All changes from API

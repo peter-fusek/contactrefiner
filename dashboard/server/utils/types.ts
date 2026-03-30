@@ -330,7 +330,7 @@ export interface ConfigResponse {
 
 // --- CRM ---
 
-export type CRMStage = 'inbox' | 'reached_out' | 'in_conversation' | 'opportunity' | 'converted' | 'dormant'
+export type CRMStage = 'inbox' | 'reached_out' | 'in_conversation' | 'opportunity' | 'converted' | 'dormant' | 'unknown' | 'ready_to_delete'
 
 export interface CRMContactState {
   stage: CRMStage

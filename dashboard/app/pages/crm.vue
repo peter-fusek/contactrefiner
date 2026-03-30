@@ -20,6 +20,7 @@ const selectedContact = ref<CRMContact | null>(null)
 const editNotes = ref('')
 const editTags = ref('')
 const isSaving = ref(false)
+const toast = useToast()
 
 const stageConfig: Array<{ stage: CRMStage; label: string; color: string }> = [
   { stage: 'inbox', label: 'Inbox', color: 'bg-blue-400' },
@@ -28,6 +29,8 @@ const stageConfig: Array<{ stage: CRMStage; label: string; color: string }> = [
   { stage: 'opportunity', label: 'Opportunity', color: 'bg-green-400' },
   { stage: 'converted', label: 'Converted', color: 'bg-cyan-400' },
   { stage: 'dormant', label: 'Dormant', color: 'bg-neutral-500' },
+  { stage: 'unknown', label: 'Unknown', color: 'bg-neutral-700' },
+  { stage: 'ready_to_delete', label: 'Ready to Delete', color: 'bg-red-500' },
 ]
 
 const filteredContacts = computed(() => {
@@ -71,6 +74,7 @@ async function handleDrop(resourceName: string, stage: CRMStage) {
       await $fetch('/api/crm/update', { method: 'POST', body: { resourceName, stage } })
     } catch {
       contact.stage = oldStage
+      toast.add({ title: 'Failed to move contact', color: 'error', icon: 'i-lucide-alert-triangle' })
     }
   }
 }
@@ -100,6 +104,9 @@ async function saveContact() {
     })
     selectedContact.value.notes = editNotes.value
     selectedContact.value.tags = tags
+    toast.add({ title: 'Contact saved', color: 'success', icon: 'i-lucide-check' })
+  } catch {
+    toast.add({ title: 'Failed to save contact', color: 'error', icon: 'i-lucide-alert-triangle' })
   } finally {
     isSaving.value = false
   }
@@ -116,6 +123,7 @@ async function moveContact(stage: CRMStage) {
     })
   } catch {
     selectedContact.value.stage = oldStage
+    toast.add({ title: 'Failed to move contact', color: 'error', icon: 'i-lucide-alert-triangle' })
   }
 }
 
@@ -160,7 +168,7 @@ function signalColor(type: string | undefined): string {
         class="text-[10px] px-2 py-1 rounded-lg border border-neutral-800 text-neutral-400 tabular-nums"
       >
         <span class="inline-block size-1.5 rounded-full mr-1" :class="sc.color" />
-        {{ sc.label }}: {{ data.stages[sc.stage] }}
+        {{ sc.label }}: {{ contactsByStage(sc.stage).length }}
       </span>
     </div>
 
@@ -253,26 +261,57 @@ function signalColor(type: string | undefined): string {
             <div class="flex items-start justify-between">
               <div>
                 <h2 class="text-lg font-bold text-neutral-100">{{ selectedContact.name }}</h2>
-                <p v-if="selectedContact.contact.org" class="text-sm text-neutral-400">{{ selectedContact.contact.org }}</p>
+                <p v-if="selectedContact.contact.title" class="text-sm text-neutral-400">{{ selectedContact.contact.title }}</p>
+                <p v-if="selectedContact.contact.org" class="text-sm text-neutral-500">{{ selectedContact.contact.org }}</p>
               </div>
               <button class="text-neutral-500 hover:text-neutral-300 p-1" @click="closeDetail">
                 <UIcon name="i-lucide-x" class="size-5" />
               </button>
             </div>
 
-            <!-- Score -->
-            <div class="flex gap-4 text-sm">
-              <div>
-                <span class="text-neutral-500">Score:</span>
-                <span class="font-bold ml-1" :class="selectedContact.score_total >= 100 ? 'text-cyan-400' : 'text-neutral-300'">{{ selectedContact.score_total }}</span>
+            <!-- Score + breakdown -->
+            <div class="space-y-1.5">
+              <div class="flex gap-4 text-sm">
+                <div>
+                  <span class="text-neutral-500">Score:</span>
+                  <span class="font-bold ml-1" :class="selectedContact.score_total >= 100 ? 'text-cyan-400' : 'text-neutral-300'">{{ selectedContact.score_total }}</span>
+                </div>
+                <div>
+                  <span class="text-neutral-500">Gap:</span>
+                  <span class="text-neutral-300 ml-1">{{ selectedContact.interaction.months_gap }}mo</span>
+                </div>
+                <div v-if="selectedContact.linkedin">
+                  <span class="text-neutral-500">LinkedIn:</span>
+                  <span class="ml-1" :class="signalColor(selectedContact.linkedin.signal_type)">{{ selectedContact.linkedin.signal_type?.replace('_', ' ') }}</span>
+                </div>
               </div>
-              <div>
-                <span class="text-neutral-500">Gap:</span>
-                <span class="text-neutral-300 ml-1">{{ selectedContact.interaction.months_gap }}mo</span>
+              <div class="flex gap-3 text-[10px] text-neutral-600">
+                <span>Interaction: {{ selectedContact.score_breakdown.interaction }}</span>
+                <span>LinkedIn: {{ selectedContact.score_breakdown.linkedin }}</span>
+                <span>Completeness: {{ selectedContact.score_breakdown.completeness }}</span>
               </div>
-              <div v-if="selectedContact.linkedin">
-                <span class="text-neutral-500">LinkedIn:</span>
-                <span class="ml-1" :class="signalColor(selectedContact.linkedin.signal_type)">{{ selectedContact.linkedin.signal_type?.replace('_', ' ') }}</span>
+            </div>
+
+            <!-- Interaction details -->
+            <div v-if="selectedContact.interaction.last_date || selectedContact.linkedin?.current_role" class="space-y-1">
+              <p v-if="selectedContact.interaction.last_date" class="text-xs text-neutral-500">
+                Last contact: <span class="text-neutral-400">{{ selectedContact.interaction.last_date }}</span>
+              </p>
+              <p v-if="selectedContact.linkedin?.current_role" class="text-xs text-neutral-500">
+                Current role: <span class="text-neutral-400">{{ selectedContact.linkedin.current_role }}</span>
+              </p>
+            </div>
+
+            <!-- Emails -->
+            <div v-if="selectedContact.contact.emails?.length">
+              <p class="text-xs text-neutral-500 mb-1">Email</p>
+              <div class="flex flex-col gap-0.5">
+                <a
+                  v-for="email in selectedContact.contact.emails"
+                  :key="email"
+                  :href="`mailto:${email}`"
+                  class="text-xs text-primary-400 hover:text-primary-300 truncate"
+                >{{ email }}</a>
               </div>
             </div>
 
