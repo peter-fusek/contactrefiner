@@ -4,7 +4,7 @@ definePageMeta({ layout: false })
 useHead({
   title: 'Contact Refiner — AI-Powered Google Contacts Cleanup',
   meta: [
-    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, 23,000+ changes applied, 164 LinkedIn signals, 5-phase daily pipeline with feedback learning, AI review, and a dashboard to approve every change.' },
+    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, 5-phase daily pipeline with AI review, LinkedIn signals, feedback learning, CRM, and a dashboard to approve every change.' },
     { property: 'og:title', content: 'Contact Refiner — AI-Powered Google Contacts Cleanup' },
     { property: 'og:description', content: 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. AI-powered analysis with human review.' },
     { property: 'og:type', content: 'website' },
@@ -46,7 +46,7 @@ useHead({
             'applicationCategory': 'BusinessApplication',
             'operatingSystem': 'Web',
             'url': 'https://contactrefiner.com',
-            'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. 23,000+ changes applied across 5,500+ contacts. 164 LinkedIn signals. 5-phase pipeline with feedback learning, AI review, and daily email digest.',
+            'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. 5-phase pipeline with 26 rule categories, AI review, LinkedIn signals, CRM, feedback learning, and daily email digest.',
             'offers': {
               '@type': 'Offer',
               'price': '0',
@@ -62,6 +62,12 @@ useHead({
 })
 
 const features = [
+  {
+    icon: 'i-lucide-contact',
+    title: 'Google Contacts Native',
+    description: 'Lives inside your Google Contacts. Changes sync directly via People API. Works on every device — iOS, Android, web, desktop.',
+    color: 'text-green-400',
+  },
   {
     icon: 'i-lucide-languages',
     title: 'Diacritics Restoration',
@@ -89,13 +95,19 @@ const features = [
   {
     icon: 'i-lucide-radar',
     title: 'LinkedIn Social Signals',
-    description: 'Scans LinkedIn profiles to detect job changes and reconnection opportunities. 63% job change rate across 164 contacts.',
+    description: 'Scans LinkedIn profiles to detect job changes and reconnection opportunities. Surfaces contacts worth reaching out to.',
     color: 'text-blue-400',
+  },
+  {
+    icon: 'i-lucide-kanban',
+    title: 'Personal CRM',
+    description: 'Kanban board for managing reconnections. Drag contacts through stages, add notes and tags, track who you reached out to.',
+    color: 'text-purple-400',
   },
   {
     icon: 'i-lucide-user-round-search',
     title: 'FollowUp Intelligence',
-    description: 'Ranks your top 50 reconnection candidates using interaction history + LinkedIn signals. Job changes surface instantly.',
+    description: 'Ranks your top reconnection candidates using interaction history + LinkedIn signals. Job changes surface instantly.',
     color: 'text-teal-400',
   },
   {
@@ -147,7 +159,7 @@ const steps = [
             to="/dashboard"
             class="text-xs px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-400 hover:text-neutral-200 hover:border-neutral-600 transition-colors"
           >
-            Dashboard
+            Live Demo
           </NuxtLink>
         </div>
       </div>
@@ -158,7 +170,7 @@ const steps = [
       <div class="max-w-3xl mx-auto text-center space-y-6">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-800 bg-neutral-900/50 text-xs text-neutral-400">
           <span class="size-1.5 rounded-full bg-primary-400 animate-pulse-glow" />
-          Open source · Security audited · 23,000+ changes · 5-phase pipeline · Feedback learning
+          Open source · Google Contacts native · 5-phase pipeline · AI review · Feedback learning
         </div>
 
         <h1 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-100 leading-tight">
@@ -168,8 +180,8 @@ const steps = [
 
         <p class="text-lg text-neutral-400 max-w-xl mx-auto leading-relaxed">
           Contact Refiner automatically fixes diacritics, formatting, and duplicates
-          in your Google Contacts. 26 rule categories + Claude AI review + LinkedIn signals + feedback learning loop.
-          You approve every change. Rejected changes never come back.
+          in your Google Contacts. 26 rule categories, Claude AI review, LinkedIn signals,
+          personal CRM, and a feedback learning loop. You approve every change.
         </p>
 
         <div class="flex items-center justify-center gap-4 pt-2">
@@ -185,9 +197,10 @@ const steps = [
           <NuxtLink
             to="/dashboard"
             class="inline-flex items-center gap-2 px-6 py-3 rounded-xl border border-neutral-700 hover:border-neutral-600 text-neutral-300 text-sm font-medium transition-colors"
+            title="Browse the dashboard with masked demo data — no login required"
           >
-            <UIcon name="i-lucide-layout-dashboard" class="size-4" />
-            Try Dashboard
+            <UIcon name="i-lucide-play" class="size-4" />
+            Try Live Demo
           </NuxtLink>
         </div>
       </div>
@@ -202,18 +215,18 @@ const steps = [
             <span class="ml-3 text-[11px] text-neutral-600">terminal</span>
           </div>
           <div class="p-5 text-sm leading-relaxed font-mono">
-            <div class="text-neutral-500">$ # Daily pipeline — 5 phases, fully automated</div>
+            <div class="text-neutral-500">$ python main.py # daily pipeline — 5 phases, fully automated</div>
             <div class="mt-2">
               <span class="text-violet-400">Phase 0:</span>
-              <span class="text-neutral-400"> Process 190 review decisions → learned 175 approvals, 15 rejections</span>
+              <span class="text-neutral-400"> Process review feedback → learn approvals and rejections</span>
             </div>
             <div>
               <span class="text-primary-400">Phase 1:</span>
-              <span class="text-neutral-400"> Analyze 5,551 contacts → auto-fix 950 HIGH confidence changes</span>
+              <span class="text-neutral-400"> Analyze all contacts → auto-fix HIGH confidence changes</span>
             </div>
             <div>
               <span class="text-amber-400">Phase 2:</span>
-              <span class="text-neutral-400"> AI review 190 MEDIUM → 8 promoted, 3 demoted</span>
+              <span class="text-neutral-400"> AI review MEDIUM confidence → promote or demote</span>
             </div>
             <div>
               <span class="text-cyan-400">Phase 3:</span>
@@ -221,11 +234,11 @@ const steps = [
             </div>
             <div>
               <span class="text-teal-400">Phase 4:</span>
-              <span class="text-neutral-400"> Score top 50 FollowUp candidates (LinkedIn + interactions)</span>
+              <span class="text-neutral-400"> Score top FollowUp candidates (LinkedIn + interactions)</span>
             </div>
             <div class="mt-2 text-neutral-600">
-              # Review at contactrefiner.com/review<br>
-              # Pipeline completed in 2m 59s — queue: 2 remaining
+              # Review changes at your-domain.com/review<br>
+              # Pipeline completed — remaining changes queued for review
             </div>
           </div>
         </div>
@@ -236,24 +249,24 @@ const steps = [
     <section class="py-12 px-6 border-t border-neutral-800/50">
       <div class="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-5 gap-6 text-center">
         <div>
-          <div class="text-2xl md:text-3xl font-bold text-primary-400 tabular-nums">23,100+</div>
-          <div class="label-refined mt-1">Changes applied</div>
-        </div>
-        <div>
-          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">6,600+</div>
-          <div class="label-refined mt-1">Review decisions</div>
-        </div>
-        <div>
-          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">5,551</div>
-          <div class="label-refined mt-1">Contacts managed</div>
-        </div>
-        <div>
-          <div class="text-2xl md:text-3xl font-bold text-cyan-400 tabular-nums">164</div>
-          <div class="label-refined mt-1">LinkedIn signals</div>
+          <div class="text-2xl md:text-3xl font-bold text-primary-400 tabular-nums">5</div>
+          <div class="label-refined mt-1">Pipeline phases</div>
         </div>
         <div>
           <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">26</div>
           <div class="label-refined mt-1">Rule categories</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">8</div>
+          <div class="label-refined mt-1">CRM stages</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-bold text-cyan-400 tabular-nums">3</div>
+          <div class="label-refined mt-1">AI agents</div>
+        </div>
+        <div>
+          <div class="text-2xl md:text-3xl font-bold text-neutral-100 tabular-nums">100%</div>
+          <div class="label-refined mt-1">Self-hosted</div>
         </div>
       </div>
     </section>
@@ -311,6 +324,70 @@ const steps = [
               <p class="mt-1 text-sm text-neutral-400 leading-relaxed">{{ step.description }}</p>
             </div>
           </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Dashboard Preview / Use Cases -->
+    <section class="py-20 px-6 border-t border-neutral-800/50">
+      <div class="max-w-5xl mx-auto">
+        <div class="text-center mb-14">
+          <h2 class="text-2xl md:text-3xl font-bold text-neutral-100">
+            See it in action
+          </h2>
+          <p class="mt-3 text-neutral-400">
+            Try the live demo — real data, masked for privacy. No login required.
+          </p>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+          <NuxtLink
+            to="/review"
+            class="rounded-xl border border-neutral-800 bg-neutral-900/50 p-6 space-y-3 hover:border-primary-500/40 transition-colors group"
+          >
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-check-circle" class="size-5 text-primary-400" />
+              <h3 class="text-sm font-semibold text-neutral-100">Review Queue</h3>
+            </div>
+            <p class="text-sm text-neutral-400 leading-relaxed">Approve or reject contact changes one by one, or use bulk actions. Filter by field, rule category, or confidence level.</p>
+            <span class="text-xs text-primary-400 group-hover:text-primary-300">View demo &rarr;</span>
+          </NuxtLink>
+
+          <NuxtLink
+            to="/changelog"
+            class="rounded-xl border border-neutral-800 bg-neutral-900/50 p-6 space-y-3 hover:border-cyan-500/40 transition-colors group"
+          >
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-history" class="size-5 text-cyan-400" />
+              <h3 class="text-sm font-semibold text-neutral-100">Changelog</h3>
+            </div>
+            <p class="text-sm text-neutral-400 leading-relaxed">Full audit trail of every change applied to your contacts. Searchable, filterable, and paginated.</p>
+            <span class="text-xs text-cyan-400 group-hover:text-cyan-300">View demo &rarr;</span>
+          </NuxtLink>
+
+          <NuxtLink
+            to="/analytics"
+            class="rounded-xl border border-neutral-800 bg-neutral-900/50 p-6 space-y-3 hover:border-amber-500/40 transition-colors group"
+          >
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-bar-chart-3" class="size-5 text-amber-400" />
+              <h3 class="text-sm font-semibold text-neutral-100">Analytics</h3>
+            </div>
+            <p class="text-sm text-neutral-400 leading-relaxed">Changes by field, confidence distribution, daily run history, top-changed contacts, and pipeline cost tracking.</p>
+            <span class="text-xs text-amber-400 group-hover:text-amber-300">View demo &rarr;</span>
+          </NuxtLink>
+
+          <NuxtLink
+            to="/social-signals"
+            class="rounded-xl border border-neutral-800 bg-neutral-900/50 p-6 space-y-3 hover:border-blue-500/40 transition-colors group"
+          >
+            <div class="flex items-center gap-2">
+              <UIcon name="i-lucide-radar" class="size-5 text-blue-400" />
+              <h3 class="text-sm font-semibold text-neutral-100">LinkedIn Signals</h3>
+            </div>
+            <p class="text-sm text-neutral-400 leading-relaxed">See job changes, active profiles, and reconnection opportunities across your network. Scanned and scored automatically.</p>
+            <span class="text-xs text-blue-400 group-hover:text-blue-300">View demo &rarr;</span>
+          </NuxtLink>
         </div>
       </div>
     </section>
