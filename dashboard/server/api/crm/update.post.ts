@@ -51,7 +51,8 @@ export default defineEventHandler(async (event) => {
   if (tags !== undefined) existing.tags = tags
 
   // Auto-extract #hashtags from notes and merge into tags (additive only)
-  const notesText = notes ?? existing.notes
+  // Only run when notes were actually provided in this request
+  const notesText = notes !== undefined ? notes : null
   if (notesText) {
     const hashtags = extractHashtags(notesText)
     if (hashtags.length) {

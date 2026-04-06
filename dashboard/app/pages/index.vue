@@ -1,6 +1,19 @@
 <script setup lang="ts">
 definePageMeta({ layout: false })
 
+const steps = [
+  { num: '01', title: 'Authenticate', description: 'Connect your Google account with OAuth2. Read-only access to Contacts, Gmail, and Calendar.' },
+  { num: '02', title: 'Analyze', description: 'A 5-phase daily pipeline scans all contacts with 26 rule categories, AI reviews ambiguous cases, and scores reconnection candidates.' },
+  { num: '03', title: 'Review & Learn', description: 'Review changes on the dashboard. Approve, reject, or edit. The system learns from every decision — rejected changes never come back.' },
+]
+
+const faqs = [
+  { q: 'Is Contact Refiner free?', a: 'Yes. Contact Refiner is open source and free to self-host. Your data stays in your own Google account and infrastructure.' },
+  { q: 'Does it delete or modify contacts without my permission?', a: 'No. Every change goes through a review queue. You approve or reject each change before it applies. The system learns from your decisions so rejected changes never come back.' },
+  { q: 'What kind of fixes does it make?', a: 'Contact Refiner fixes missing diacritics on Slovak and Czech names, normalizes phone numbers, standardizes titles and company names, flags low-value contacts for deletion, and uses AI to catch edge cases that rules miss.' },
+  { q: 'How does the LinkedIn integration work?', a: 'Contact Refiner scans LinkedIn profiles to detect job changes and activity. It scores your contacts for reconnection opportunities and surfaces the best candidates in a personal CRM board.' },
+]
+
 useHead({
   title: 'Contact Refiner — AI-Powered Google Contacts Cleanup',
   meta: [
@@ -61,63 +74,20 @@ useHead({
             '@type': 'HowTo',
             'name': 'How to clean up your Google Contacts with AI',
             'description': 'Set up Contact Refiner to automatically fix diacritics, formatting, and duplicates in your Google Contacts.',
-            'step': [
-              {
-                '@type': 'HowToStep',
-                'name': 'Authenticate',
-                'text': 'Connect your Google account with OAuth2. Read-only access to Contacts, Gmail, and Calendar.',
-                'position': 1,
-              },
-              {
-                '@type': 'HowToStep',
-                'name': 'Analyze',
-                'text': 'A 5-phase daily pipeline scans all contacts with 26 rule categories, AI reviews ambiguous cases, and scores reconnection candidates.',
-                'position': 2,
-              },
-              {
-                '@type': 'HowToStep',
-                'name': 'Review & Learn',
-                'text': 'Review changes on the dashboard. Approve, reject, or edit. The system learns from every decision — rejected changes never come back.',
-                'position': 3,
-              },
-            ],
+            'step': steps.map((s, i) => ({
+              '@type': 'HowToStep',
+              'name': s.title,
+              'text': s.description,
+              'position': i + 1,
+            })),
           },
           {
             '@type': 'FAQPage',
-            'mainEntity': [
-              {
-                '@type': 'Question',
-                'name': 'Is Contact Refiner free?',
-                'acceptedAnswer': {
-                  '@type': 'Answer',
-                  'text': 'Yes. Contact Refiner is open source and free to self-host. Your data stays in your own Google account and infrastructure.',
-                },
-              },
-              {
-                '@type': 'Question',
-                'name': 'Does it delete or modify contacts without my permission?',
-                'acceptedAnswer': {
-                  '@type': 'Answer',
-                  'text': 'No. Every change goes through a review queue. You approve or reject each change before it applies. The system learns from your decisions so rejected changes never come back.',
-                },
-              },
-              {
-                '@type': 'Question',
-                'name': 'What kind of fixes does it make?',
-                'acceptedAnswer': {
-                  '@type': 'Answer',
-                  'text': 'Contact Refiner fixes missing diacritics on Slovak and Czech names, normalizes phone numbers, standardizes titles and company names, flags low-value contacts for deletion, and uses AI to catch edge cases that rules miss.',
-                },
-              },
-              {
-                '@type': 'Question',
-                'name': 'How does the LinkedIn integration work?',
-                'acceptedAnswer': {
-                  '@type': 'Answer',
-                  'text': 'Contact Refiner scans LinkedIn profiles to detect job changes and activity. It scores your contacts for reconnection opportunities and surfaces the best candidates in a personal CRM board.',
-                },
-              },
-            ],
+            'mainEntity': faqs.map(f => ({
+              '@type': 'Question',
+              'name': f.q,
+              'acceptedAnswer': { '@type': 'Answer', 'text': f.a },
+            })),
           },
         ],
       }),
@@ -194,18 +164,6 @@ const features = [
   },
 ]
 
-const steps = [
-  { num: '01', title: 'Authenticate', description: 'Connect your Google account with OAuth2. Read-only access to Contacts, Gmail, and Calendar.' },
-  { num: '02', title: 'Analyze', description: 'A 5-phase daily pipeline scans all contacts with 26 rule categories, AI reviews ambiguous cases, and scores reconnection candidates.' },
-  { num: '03', title: 'Review & Learn', description: 'Review changes on the dashboard. Approve, reject, or edit. The system learns from every decision — rejected changes never come back.' },
-]
-
-const faqs = [
-  { q: 'Is Contact Refiner free?', a: 'Yes. Contact Refiner is open source and free to self-host. Your data stays in your own Google account and infrastructure.' },
-  { q: 'Does it delete or modify contacts without my permission?', a: 'No. Every change goes through a review queue. You approve or reject each change before it applies. The system learns from your decisions so rejected changes never come back.' },
-  { q: 'What kind of fixes does it make?', a: 'Contact Refiner fixes missing diacritics on Slovak and Czech names, normalizes phone numbers, standardizes titles and company names, flags low-value contacts for deletion, and uses AI to catch edge cases that rules miss.' },
-  { q: 'How does the LinkedIn integration work?', a: 'Contact Refiner scans LinkedIn profiles to detect job changes and activity. It scores your contacts for reconnection opportunities and surfaces the best candidates in a personal CRM board.' },
-]
 </script>
 
 <template>
