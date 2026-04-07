@@ -19,8 +19,8 @@ export default defineNuxtConfig({
       ],
       link: [],
       script: [
-        { src: 'https://www.googletagmanager.com/gtag/js?id=G-QFW0D3J3KV', async: true },
-        { innerHTML: "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-QFW0D3J3KV');" },
+        { src: 'https://www.googletagmanager.com/gtag/js?id=G-WRBBPFCSPS', async: true },
+        { innerHTML: "window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-WRBBPFCSPS');" },
       ],
     },
   },
