@@ -177,14 +177,16 @@ function signalColor(type: string | undefined): string {
         <!-- View toggle -->
         <div class="flex rounded-lg border border-neutral-800 overflow-hidden">
           <button
-            class="px-3 py-1.5 text-xs transition-colors"
+            aria-label="Kanban view"
+            class="px-3 py-2 text-xs transition-colors"
             :class="viewMode === 'kanban' ? 'bg-primary-500/20 text-primary-400' : 'text-neutral-500 hover:text-neutral-300'"
             @click="viewMode = 'kanban'"
           >
             <UIcon name="i-lucide-kanban" class="size-3.5" />
           </button>
           <button
-            class="px-3 py-1.5 text-xs transition-colors"
+            aria-label="List view"
+            class="px-3 py-2 text-xs transition-colors"
             :class="viewMode === 'list' ? 'bg-primary-500/20 text-primary-400' : 'text-neutral-500 hover:text-neutral-300'"
             @click="viewMode = 'list'"
           >
@@ -217,14 +219,14 @@ function signalColor(type: string | undefined): string {
       <select
         v-if="viewMode === 'list'"
         v-model="filterStage"
-        class="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-sm text-neutral-300"
+        class="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-sm text-neutral-300 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
       >
         <option value="all">All stages</option>
         <option v-for="sc in stageConfig" :key="sc.stage" :value="sc.stage">{{ sc.label }}</option>
       </select>
       <select
         v-model="sortBy"
-        class="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-sm text-neutral-300"
+        class="bg-neutral-900 border border-neutral-800 rounded-lg px-3 py-1.5 text-sm text-neutral-300 focus:outline-none focus:ring-2 focus:ring-primary-500/50"
       >
         <option value="score">Score</option>
         <option value="name">Name</option>
@@ -299,7 +301,7 @@ function signalColor(type: string | undefined): string {
                 <p v-if="selectedContact.contact.title" class="text-sm text-neutral-400">{{ selectedContact.contact.title }}</p>
                 <p v-if="selectedContact.contact.org" class="text-sm text-neutral-500">{{ selectedContact.contact.org }}</p>
               </div>
-              <button class="text-neutral-500 hover:text-neutral-300 p-1" @click="closeDetail">
+              <button aria-label="Close" class="text-neutral-500 hover:text-neutral-300 p-2 -m-1 rounded focus:outline-none focus:ring-2 focus:ring-neutral-600" @click="closeDetail">
                 <UIcon name="i-lucide-x" class="size-5" />
               </button>
             </div>

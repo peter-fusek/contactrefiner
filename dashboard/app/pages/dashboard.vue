@@ -145,7 +145,7 @@ function formatTime(iso: string | null) {
         </p>
         <span class="text-[10px] text-neutral-600">last {{ recentRuns.length }} runs</span>
       </div>
-      <div class="flex gap-1.5 items-end">
+      <div role="img" :aria-label="`Pipeline health: last ${recentRuns.length} runs, ${recentRuns.filter(r => r.errors.length > 0).length} with errors`" class="flex gap-1.5 items-end">
         <div
           v-for="(run, i) in recentRuns"
           :key="i"

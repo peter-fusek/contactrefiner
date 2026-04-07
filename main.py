@@ -313,7 +313,7 @@ def cmd_ai_review(resume=False) -> int:
 
     if not workplan_path or not workplan_path.exists():
         print("❌ No workplan found!")
-        return
+        return 0
 
     workplan = load_workplan(workplan_path)
     print(f"Workplan: {workplan_path.name}")
@@ -322,7 +322,7 @@ def cmd_ai_review(resume=False) -> int:
     backup_path = get_latest_backup()
     if not backup_path:
         print("❌ No backup found!")
-        return
+        return 0
 
     backup_data = load_backup(backup_path)
     contacts_by_rn = {
