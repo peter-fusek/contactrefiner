@@ -1,5 +1,5 @@
 import type { CRMStage } from '../../utils/types'
-import { getCRMState, saveCRMState } from '../../utils/gcs'
+import { getCRMStateFresh, saveCRMState } from '../../utils/gcs'
 import { isDemoMode } from '../../utils/demo'
 
 const VALID_STAGES: CRMStage[] = ['inbox', 'reached_out', 'in_conversation', 'opportunity', 'converted', 'dormant', 'unknown', 'ready_to_delete']
@@ -19,8 +19,8 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { resourceName, stage, notes, tags } = body ?? {}
 
-  if (!resourceName || typeof resourceName !== 'string') {
-    throw createError({ statusCode: 400, statusMessage: 'resourceName required' })
+  if (!resourceName || typeof resourceName !== 'string' || !/^people\/\d+$/.test(resourceName)) {
+    throw createError({ statusCode: 400, statusMessage: 'resourceName must be people/{id} format' })
   }
 
   if (stage !== undefined && !VALID_STAGES.includes(stage)) {
@@ -35,7 +35,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Tags must be string array' })
   }
 
-  const state = await getCRMState()
+  if (tags !== undefined && (tags.length > 50 || tags.some((t: string) => t.length > 100))) {
+    throw createError({ statusCode: 400, statusMessage: 'Too many tags (max 50) or tag too long (max 100 chars)' })
+  }
+
+  const state = await getCRMStateFresh()
   const existing = state.contacts[resourceName] ?? {
     stage: 'inbox' as CRMStage,
     stageChangedAt: new Date().toISOString(),

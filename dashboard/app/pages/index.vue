@@ -3,7 +3,7 @@ definePageMeta({ layout: false })
 
 const steps = [
   { num: '01', title: 'Authenticate', description: 'Connect your Google account with OAuth2. Read-only access to Contacts, Gmail, and Calendar.' },
-  { num: '02', title: 'Analyze', description: 'A 5-phase daily pipeline scans all contacts with 26 rule categories, AI reviews ambiguous cases, and scores reconnection candidates.' },
+  { num: '02', title: 'Analyze', description: 'A 6-phase daily pipeline scans all contacts with 26 rule categories, AI reviews ambiguous cases, scores reconnection candidates, and syncs CRM data back to Google Contacts.' },
   { num: '03', title: 'Review & Learn', description: 'Review changes on the dashboard. Approve, reject, or edit. The system learns from every decision — rejected changes never come back.' },
 ]
 
@@ -12,12 +12,13 @@ const faqs = [
   { q: 'Does it delete or modify contacts without my permission?', a: 'No. Every change goes through a review queue. You approve or reject each change before it applies. The system learns from your decisions so rejected changes never come back.' },
   { q: 'What kind of fixes does it make?', a: 'Contact Refiner fixes missing diacritics on Slovak and Czech names, normalizes phone numbers, standardizes titles and company names, flags low-value contacts for deletion, and uses AI to catch edge cases that rules miss.' },
   { q: 'How does the LinkedIn integration work?', a: 'Contact Refiner scans LinkedIn profiles to detect job changes and activity. It scores your contacts for reconnection opportunities and surfaces the best candidates in a personal CRM board.' },
+  { q: 'Does the CRM sync change my Google Contacts?', a: 'Yes — CRM notes sync to contact biographies and tags become contact groups. Changes are additive only: nothing is ever removed from your contacts. You can search CRM data natively on any device.' },
 ]
 
 useHead({
   title: 'Contact Refiner — AI-Powered Google Contacts Cleanup',
   meta: [
-    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, 5-phase daily pipeline with AI review, LinkedIn signals, feedback learning, CRM, and a dashboard to approve every change.' },
+    { name: 'description', content: 'Fix diacritics, formatting, and duplicates in Google Contacts. 26 rule categories, 6-phase daily pipeline with AI review, LinkedIn signals, personal CRM with bi-directional sync, feedback learning, and a dashboard to approve every change.' },
     { property: 'og:title', content: 'Contact Refiner — AI-Powered Google Contacts Cleanup' },
     { property: 'og:description', content: 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. AI-powered analysis with human review.' },
     { property: 'og:type', content: 'website' },
@@ -59,7 +60,7 @@ useHead({
             'applicationCategory': 'BusinessApplication',
             'operatingSystem': 'Web',
             'url': 'https://contactrefiner.com',
-            'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. 5-phase pipeline with 26 rule categories, AI review, LinkedIn signals, CRM, feedback learning, and daily email digest.',
+            'description': 'Automatically fix diacritics, formatting, and duplicates in your Google Contacts. 6-phase pipeline with 26 rule categories, AI review, LinkedIn signals, personal CRM with bi-directional sync, feedback learning, and daily email digest.',
             'offers': {
               '@type': 'Offer',
               'price': '0',
@@ -68,7 +69,7 @@ useHead({
             'author': { '@id': 'https://contactrefiner.com/#organization' },
             'downloadUrl': 'https://github.com/peter-fusek/contactrefiner',
             'screenshot': 'https://contactrefiner.com/og-image.png',
-            'featureList': 'Diacritics restoration, Smart formatting, Contact cleanup, AI review, Learning system, Daily email digest, Interaction tracking, Privacy-first self-hosted',
+            'featureList': 'Diacritics restoration, Smart formatting, Contact cleanup, AI review, CRM sync to Google Contacts, Smart hashtag labels, Pipeline health monitoring, Learning system, Daily email digest, Interaction tracking, Privacy-first self-hosted',
           },
           {
             '@type': 'HowTo',
@@ -135,14 +136,32 @@ const features = [
   {
     icon: 'i-lucide-kanban',
     title: 'Personal CRM',
-    description: 'Kanban board for managing reconnections. Drag contacts through stages, add notes and tags, track who you reached out to.',
+    description: 'Kanban board with quick-action buttons, inline AI reconnect prompts, and LinkedIn signal context on every tile. Drag contacts through stages.',
     color: 'text-purple-400',
   },
   {
     icon: 'i-lucide-user-round-search',
     title: 'FollowUp Intelligence',
-    description: 'Ranks your top reconnection candidates using interaction history + LinkedIn signals. Job changes surface instantly.',
+    description: 'Scores contacts by interaction history, months since last contact, LinkedIn job changes, and profile completeness. Top candidates surface automatically.',
     color: 'text-teal-400',
+  },
+  {
+    icon: 'i-lucide-refresh-cw',
+    title: 'CRM Sync to Contacts',
+    description: 'Notes sync back to Google Contacts biographies. Tags become contact groups. Your CRM data lives everywhere — native search, mobile, desktop.',
+    color: 'text-emerald-400',
+  },
+  {
+    icon: 'i-lucide-hash',
+    title: 'Smart Hashtag Labels',
+    description: 'Write #hashtags in CRM notes — they auto-convert to searchable tags and Google Contact groups. Slovak diacritics supported.',
+    color: 'text-pink-400',
+  },
+  {
+    icon: 'i-lucide-activity',
+    title: 'Pipeline Health Monitor',
+    description: 'Visual run history showing duration, errors, and phase completion. Spot problems before they affect your contacts.',
+    color: 'text-red-400',
   },
   {
     icon: 'i-lucide-graduation-cap',
@@ -199,7 +218,7 @@ const features = [
       <div class="max-w-3xl mx-auto text-center space-y-6">
         <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-neutral-800 bg-neutral-900/50 text-xs text-neutral-400">
           <span class="size-1.5 rounded-full bg-primary-400 animate-pulse-glow" />
-          Open source · Google Contacts native · 5-phase pipeline · AI review · Feedback learning
+          Open source · Google Contacts native · 6-phase pipeline · AI review · CRM sync · Feedback learning
         </div>
 
         <h1 class="text-4xl md:text-5xl font-bold tracking-tight text-neutral-100 leading-tight">
@@ -265,6 +284,10 @@ const features = [
               <span class="text-teal-400">Phase 4:</span>
               <span class="text-neutral-400"> Score top FollowUp candidates (LinkedIn + interactions)</span>
             </div>
+            <div>
+              <span class="text-emerald-400">Phase 5:</span>
+              <span class="text-neutral-400"> Sync CRM notes → Google Contacts biographies + groups</span>
+            </div>
             <div class="mt-2 text-neutral-600">
               # Review changes at your-domain.com/review<br>
               # Pipeline completed — remaining changes queued for review
@@ -278,7 +301,7 @@ const features = [
     <section class="py-12 px-6 border-t border-neutral-800/50">
       <div class="max-w-5xl mx-auto grid grid-cols-2 md:grid-cols-5 gap-6 text-center">
         <div>
-          <div class="text-2xl md:text-3xl font-bold text-primary-400 tabular-nums">5</div>
+          <div class="text-2xl md:text-3xl font-bold text-primary-400 tabular-nums">6</div>
           <div class="label-refined mt-1">Pipeline phases</div>
         </div>
         <div>

@@ -127,8 +127,16 @@ async function findAllFiles(prefix: string, extension: string): Promise<string[]
 }
 
 async function readAllChangelogs(): Promise<ChangelogLine[]> {
-  const paths = await findAllFiles('data/changelog_', '.jsonl')
-  if (!paths.length) return []
+  const allPaths = await findAllFiles('data/changelog_', '.jsonl')
+  if (!allPaths.length) return []
+
+  // Only load changelogs from the last 90 days to prevent unbounded accumulation
+  const cutoff = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const paths = allPaths.filter((p) => {
+    // Filenames: data/changelog_YYYY-MM-DD*.jsonl — extract date part
+    const match = p.match(/changelog_(\d{4}-\d{2}-\d{2})/)
+    return !match || match[1] >= cutoff // keep if no date parseable or within window
+  })
 
   const all: ChangelogLine[] = []
   for (const path of paths) {
@@ -150,9 +158,14 @@ async function readAllChangelogs(): Promise<ChangelogLine[]> {
   return all
 }
 
+/** Shared cache for raw changelog data — single GCS fetch path for both filtered and full views */
+async function getCachedChangelogs(): Promise<ChangelogLine[]> {
+  return cachedRead('changelog_raw', readAllChangelogs)
+}
+
 export async function getChangelog(): Promise<ChangelogEntry[]> {
   return cachedRead('changelog', async () => {
-    const all = await readAllChangelogs()
+    const all = await getCachedChangelogs()
     const entries = all.filter((e): e is ChangelogEntry => !('type' in e))
 
     // Deduplicate: same (resourceName, field, old, new) keeps only the first occurrence
@@ -167,7 +180,7 @@ export async function getChangelog(): Promise<ChangelogEntry[]> {
 }
 
 export async function getChangelogWithMarkers(): Promise<ChangelogLine[]> {
-  return cachedRead('changelog_full', readAllChangelogs)
+  return getCachedChangelogs()
 }
 
 export function isBatchMarker(entry: ChangelogLine): entry is BatchMarker {
@@ -183,14 +196,20 @@ export async function writeJson(path: string, data: unknown): Promise<void> {
       contentType: 'application/json',
       resumable: false,
     })
-  } catch (err) {
-    // Retry once — GCS can fail on overwrite with precondition errors
-    console.warn(`[GCS] writeJson(${path}) first attempt failed: ${(err as Error).message}, retrying...`)
-    await getBucket().file(path).save(content, {
-      contentType: 'application/json',
-      resumable: false,
-      metadata: { cacheControl: 'no-cache' },
-    })
+  } catch (firstErr) {
+    // Retry once after 500ms — GCS can fail on overwrite with precondition errors
+    console.error(`[GCS] writeJson(${path}) first attempt failed: ${(firstErr as Error).message}, retrying in 500ms...`)
+    await new Promise(resolve => setTimeout(resolve, 500))
+    try {
+      await getBucket().file(path).save(content, {
+        contentType: 'application/json',
+        resumable: false,
+        metadata: { cacheControl: 'no-cache' },
+      })
+    } catch (retryErr) {
+      console.error(`[GCS] writeJson(${path}) retry also failed: ${(retryErr as Error).message}`)
+      throw new Error(`GCS write failed for ${path}: first=${(firstErr as Error).message}, retry=${(retryErr as Error).message}`)
+    }
   }
 }
 
@@ -203,10 +222,13 @@ async function appendJsonl(path: string, entries: unknown[]): Promise<void> {
     const [content] = await file.download()
     existing = content.toString('utf-8')
   } catch (err: unknown) {
-    // File likely doesn't exist yet — log non-404 errors but proceed to create
     const code = (err as { code?: number })?.code
-    if (code !== 404) {
-      console.warn(`[GCS] appendJsonl(${path}) read returned code ${code}:`, (err as Error).message)
+    if (code === 404) {
+      // File doesn't exist yet — will be created with just the new lines
+    } else {
+      // Non-404 errors (auth, permissions, network) — throw to prevent overwriting existing data
+      console.error(`[GCS] appendJsonl(${path}) read failed (code=${code}):`, (err as Error).message)
+      throw err
     }
   }
 
@@ -441,6 +463,12 @@ export async function getCRMState(): Promise<CRMState> {
     const data = await readJson<CRMState>('data/crm_state.json')
     return data ?? { version: 1, updatedAt: new Date().toISOString(), contacts: {} }
   })
+}
+
+/** Read CRM state directly from GCS, bypassing cache. Use in write handlers to reduce race window. */
+export async function getCRMStateFresh(): Promise<CRMState> {
+  const data = await readJson<CRMState>('data/crm_state.json')
+  return data ?? { version: 1, updatedAt: new Date().toISOString(), contacts: {} }
 }
 
 export async function saveCRMState(state: CRMState): Promise<void> {

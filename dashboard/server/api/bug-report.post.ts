@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, message: 'Bug reporting not configured' })
   }
 
-  // Size guard — screenshots can be large
+  // Size guard — check Content-Length header first, then verify actual body size after parsing
   const contentLength = Number(getHeader(event, 'content-length') || 0)
   if (contentLength > MAX_PAYLOAD_BYTES) {
     throw createError({ statusCode: 413, message: 'Payload too large' })
@@ -27,6 +27,12 @@ export default defineEventHandler(async (event) => {
     pageState: { route?: string, page?: string }
     environment: { url?: string, viewport?: string, userAgent?: string, timestamp?: string }
   }>(event)
+
+  // Enforce actual body size (catches missing/forged Content-Length and chunked transfer)
+  const actualSize = JSON.stringify(body).length
+  if (actualSize > MAX_PAYLOAD_BYTES) {
+    throw createError({ statusCode: 413, message: 'Payload too large' })
+  }
 
   if (!body.description?.trim()) {
     throw createError({ statusCode: 400, message: 'Description is required' })

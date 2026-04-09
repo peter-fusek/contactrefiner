@@ -26,7 +26,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Invalid decision value' })
   }
 
-  let session = await getReviewSession(body.sessionId)
+  let session: ReviewSession | null = null
+  try {
+    session = await getReviewSession(body.sessionId)
+  } catch (err) {
+    console.error(`[Review] Failed to load session ${body.sessionId}:`, (err as Error).message)
+    // GCS error (not 404) — don't silently create empty session, surface the error
+    throw createError({ statusCode: 503, message: 'Session load failed. Please try again.' })
+  }
   if (!session) {
     session = {
       id: body.sessionId,
