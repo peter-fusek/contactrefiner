@@ -39,11 +39,16 @@
 - `readJson` returns null ONLY on 404 — throws for all other GCS errors (auth, permissions, etc.)
 - Emergency stop: `data/pipeline_paused.json` (written by dashboard, checked by entrypoint.py)
 - All exit paths in `run()` must go through `_finalize_run()` (record + email + log) — never call `_record_pipeline_run` + `return` directly
+- Changelog dedup key: `resourceName|field|old|new` (no session_id) — changelog.get.ts skips dedup when filtering by sessionId to preserve per-run drill-down
+- batch_processor: changelog logged AFTER API success (not before); no-op round-trips (same field, final new == original old) are suppressed
+- Google Contacts account: peterfusek1980@gmail.com is u/1 in Chrome (not u/0) — always use u/1 for contact searches/creation
 
 ## Dashboard Patterns
 - Name resolution: `getContactNameMap()` in gcs.ts — resolves resourceName → displayName from workplan + LinkedIn signals; changelog.get.ts also enriches inline from changelog `names[0].displayName` entries
 - CRM state: `data/crm_state.json` in GCS — stage, notes, tags per contact; `getCRMState()`/`saveCRMState()` in gcs.ts
 - CRM API: GET /api/crm (merged followup+signals+state), POST /api/crm/update, POST /api/crm/batch-move
+- CRM-only contacts: contacts added via API without follow-up scores appear in CRM view if stage is non-inbox; `name` field in CRMContactState used for display
+- resourceName format: Google People API uses `people/c123456` (with `c` prefix) — all regex validation must use `/^people\/c?\d+$/`
 - Cache: 60s TTL in-memory Map; `clearCache()` exposed via POST /api/cache-clear
 - Demo masking: `demo.ts` — must handle ALL PII fields including `field === 'contact'` (tobedeleted names)
 - API sub-routes: use directory structure (e.g., `api/config/index.get.ts` + `api/config/pause.post.ts`)
