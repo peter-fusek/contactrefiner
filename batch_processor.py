@@ -3,9 +3,12 @@ Batch processing with interactive user approval.
 Displays diffs, handles approval/rejection, executes changes via API.
 """
 import json
+import logging
 import re
 from datetime import datetime
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 from config import DATA_DIR, BATCH_SIZE, CONFIDENCE_HIGH, CONFIDENCE_MEDIUM
 from api_client import PeopleAPIClient
@@ -365,6 +368,28 @@ def process_batches(
             if not result["changes"]:
                 continue
 
+            # Suppress no-op round-trips: if sequential changes to the same field
+            # cancel out (final new == original old), remove them entirely.
+            # Example: givenName "Dáša"→"Dasa" then "Dasa"→"Dáša" is a no-op.
+            changes = result["changes"]
+            field_chain: dict[str, list[dict]] = {}
+            for c in changes:
+                field_chain.setdefault(c["field"], []).append(c)
+            filtered_changes = []
+            for field, chain in field_chain.items():
+                if len(chain) >= 2:
+                    original_old = chain[0].get("old", "")
+                    final_new = chain[-1].get("new", "")
+                    if str(original_old) == str(final_new):
+                        # Round-trip detected — skip all changes for this field
+                        logger.info(f"Suppressed no-op round-trip for {field}: {original_old!r} → ... → {final_new!r}")
+                        continue
+                filtered_changes.extend(chain)
+            result["changes"] = filtered_changes
+
+            if not result["changes"]:
+                continue
+
             resource_name = result["resourceName"]
             person = contacts_lookup.get(resource_name)
             if not person:
@@ -379,7 +404,16 @@ def process_batches(
                 if not update_fields:
                     continue
 
-                # Log changes BEFORE applying
+                # Execute update
+                etag = get_etag(person) or result.get("etag", "")
+                client.update_contact(
+                    resource_name=resource_name,
+                    etag=etag,
+                    person_body=body,
+                    update_fields=update_fields,
+                )
+
+                # Log changes AFTER successful API call
                 for change in result["changes"]:
                     changelog.log_change(
                         resource_name=resource_name,
@@ -390,15 +424,6 @@ def process_batches(
                         confidence=change["confidence"],
                         batch=batch_num,
                     )
-
-                # Execute update
-                etag = get_etag(person) or result.get("etag", "")
-                client.update_contact(
-                    resource_name=resource_name,
-                    etag=etag,
-                    person_body=body,
-                    update_fields=update_fields,
-                )
 
                 batch_success += 1
                 print(f"   ✅ [{contact_idx}] {result['displayName']}")
