@@ -21,7 +21,10 @@ export default defineEventHandler(async (event): Promise<CRMResponse> => {
   const contacts: CRMContact[] = []
   const scores = followup.scores ?? []
 
+  const seenResources = new Set<string>()
+
   for (const score of scores) {
+    seenResources.add(score.resourceName)
     const state = demo ? undefined : crmState.contacts[score.resourceName]
     const masked = demo ? maskFollowUpScore(score) : score
     const resolvedName = masked.name || nameMap.get(score.resourceName) || score.resourceName.replace('people/', 'Contact ')
@@ -39,6 +42,29 @@ export default defineEventHandler(async (event): Promise<CRMResponse> => {
       contact: masked.contact,
       followup_prompt: masked.followup_prompt,
     })
+  }
+
+  // Include CRM-only contacts (have CRM state but no follow-up score)
+  if (!demo) {
+    for (const [resourceName, state] of Object.entries(crmState.contacts)) {
+      if (seenResources.has(resourceName)) continue
+      if (state.stage === 'inbox') continue // skip default-stage CRM-only entries
+      const resolvedName = nameMap.get(resourceName) || resourceName.replace('people/', 'Contact ')
+      contacts.push({
+        resourceName,
+        name: resolvedName,
+        stage: state.stage,
+        stageChangedAt: state.stageChangedAt ?? '',
+        notes: state.notes ?? '',
+        tags: state.tags ?? [],
+        score_total: 0,
+        score_breakdown: { interaction: 0, linkedin: 0, completeness: 0 },
+        interaction: { last_date: '', count: 0, months_gap: 0 },
+        linkedin: null,
+        contact: { org: '', title: '', has_email: false, has_phone: false, has_org: false, has_linkedin_url: false, completeness: 0, emails: [], urls: [] },
+        followup_prompt: null,
+      })
+    }
   }
 
   // Cap inbox at 50: show all contacts with explicit stages, but only top 50 inbox contacts by score
