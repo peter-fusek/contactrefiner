@@ -28,9 +28,7 @@ export default defineEventHandler(async (event): Promise<GroupedChangelogRespons
   const confidence = (query.confidence as string || '').toLowerCase()
   const sessionId = (query.sessionId as string || '')
 
-  const [nameMap] = await Promise.all([
-    getContactNameMap(),
-  ])
+  const nameMap = await getContactNameMap()
 
   // When filtering by session ID, skip dedup — identical changes across sessions
   // must remain visible for per-run drill-down (dedup collapses repeated fixes)

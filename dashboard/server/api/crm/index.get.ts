@@ -59,7 +59,7 @@ export default defineEventHandler(async (event): Promise<CRMResponse> => {
         tags: state.tags ?? [],
         score_total: 0,
         score_breakdown: { interaction: 0, linkedin: 0, completeness: 0 },
-        interaction: { last_date: '', count: 0, months_gap: 0 },
+        interaction: { last_date: null, count: 0, months_gap: 0 },
         linkedin: null,
         contact: { org: '', title: '', has_email: false, has_phone: false, has_org: false, has_linkedin_url: false, completeness: 0, emails: [], urls: [] },
         followup_prompt: null,
