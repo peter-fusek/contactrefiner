@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
 
   let moved = 0
   for (const rn of resourceNames) {
-    if (typeof rn !== 'string' || !/^people\/\d+$/.test(rn)) continue
+    if (typeof rn !== 'string' || !/^people\/c?\d+$/.test(rn)) continue
     const existing = state.contacts[rn] ?? { stage: 'inbox' as CRMStage, stageChangedAt: now, notes: '', tags: [] }
     existing.stage = stage
     existing.stageChangedAt = now

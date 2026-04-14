@@ -49,7 +49,7 @@ export default defineEventHandler(async (event): Promise<CRMResponse> => {
     for (const [resourceName, state] of Object.entries(crmState.contacts)) {
       if (seenResources.has(resourceName)) continue
       if (state.stage === 'inbox') continue // skip default-stage CRM-only entries
-      const resolvedName = nameMap.get(resourceName) || resourceName.replace('people/', 'Contact ')
+      const resolvedName = state.name || nameMap.get(resourceName) || resourceName.replace('people/', 'Contact ')
       contacts.push({
         resourceName,
         name: resolvedName,

@@ -337,6 +337,7 @@ export interface CRMContactState {
   stageChangedAt: string
   notes: string
   tags: string[]
+  name?: string
 }
 
 export interface CRMState {

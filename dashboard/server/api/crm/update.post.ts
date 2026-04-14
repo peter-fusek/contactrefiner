@@ -17,9 +17,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const body = await readBody(event)
-  const { resourceName, stage, notes, tags } = body ?? {}
+  const { resourceName, stage, notes, tags, name } = body ?? {}
 
-  if (!resourceName || typeof resourceName !== 'string' || !/^people\/\d+$/.test(resourceName)) {
+  if (!resourceName || typeof resourceName !== 'string' || !/^people\/c?\d+$/.test(resourceName)) {
     throw createError({ statusCode: 400, statusMessage: 'resourceName must be people/{id} format' })
   }
 
@@ -53,6 +53,7 @@ export default defineEventHandler(async (event) => {
   }
   if (notes !== undefined) existing.notes = notes
   if (tags !== undefined) existing.tags = tags
+  if (name !== undefined && typeof name === 'string' && name.length <= 200) existing.name = name
 
   // Auto-extract #hashtags from notes and merge into tags (additive only)
   // Only run when notes were actually provided in this request
