@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { LICRMResponse, LIContact, LITier, LIInstitution, LIInstitutionTier } from '~/server/utils/types'
+import type { LICRMResponse, LIContact, LIContactStatus, LITier, LIInstitution, LIInstitutionTier } from '~/server/utils/types'
 
 useHead({
   title: 'LinkedIn CRM — Contact Refiner',
@@ -7,6 +7,7 @@ useHead({
 })
 
 const { data, status, refresh } = useFetch<LICRMResponse>('/api/linkedin-crm')
+const toast = useToast()
 
 const activeTab = ref(0)
 const tabs = [
@@ -17,15 +18,31 @@ const tabs = [
 ]
 
 const search = ref('')
+const statusFilter = ref<LIContactStatus | ''>('')
 const selectedContact = ref<LIContact | null>(null)
+
+// Edit state for detail panel
+const editNotes = ref('')
+const isSaving = ref(false)
+
+// DM logging form
+const showDMForm = ref(false)
+const dmTemplate = ref('')
+const dmStatus = ref<'SENT' | 'SKIPPED'>('SENT')
+const dmSkipReason = ref('')
+
+// Status cycle order
+const STATUS_CYCLE: LIContactStatus[] = ['PENDING', 'REQUEST_SENT', 'CONNECTED', 'DM_SENT', 'RESPONDED']
 
 // Pipeline tab — group contacts by tier (single pass)
 const tierGroups = computed(() => {
   const groups: Record<LITier, LIContact[]> = { T0: [], T1: [], T2: [], T3: [] }
   if (!data.value) return groups
   const q = search.value.toLowerCase()
+  const sf = statusFilter.value
   for (const c of data.value.data.contacts) {
-    if (q && !c.name.toLowerCase().includes(q) && !c.role.toLowerCase().includes(q)) continue
+    if (q && !c.name.toLowerCase().includes(q) && !c.role?.toLowerCase().includes(q)) continue
+    if (sf && c.status !== sf) continue
     groups[c.tier].push(c)
   }
   return groups
@@ -76,6 +93,144 @@ function categoryLabel(category: string): string {
 
 function selectContact(contact: LIContact): void {
   selectedContact.value = contact
+  editNotes.value = contact.notes
+  showDMForm.value = false
+}
+
+function closeDetail(): void {
+  selectedContact.value = null
+  showDMForm.value = false
+}
+
+// --- Mutations ---
+
+async function cycleStatus(): Promise<void> {
+  const contact = selectedContact.value
+  if (!contact) return
+  const current = contact.status
+  const idx = STATUS_CYCLE.indexOf(current)
+  const next = idx >= 0 ? STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length]! : STATUS_CYCLE[0]!
+  // Optimistic
+  contact.status = next
+  try {
+    await $fetch('/api/linkedin-crm', {
+      method: 'POST',
+      body: { action: 'updateContactStatus', contactId: contact.id, status: next },
+    })
+    if (next === 'DM_SENT') {
+      contact.dmSentDate = new Date().toISOString().split('T')[0]
+    }
+  } catch {
+    contact.status = current
+    toast.add({ title: 'Failed to update status', color: 'error', icon: 'i-lucide-alert-triangle' })
+  }
+}
+
+async function setStatus(newStatus: LIContactStatus): Promise<void> {
+  const contact = selectedContact.value
+  if (!contact || contact.status === newStatus) return
+  const old = contact.status
+  contact.status = newStatus
+  try {
+    await $fetch('/api/linkedin-crm', {
+      method: 'POST',
+      body: { action: 'updateContactStatus', contactId: contact.id, status: newStatus },
+    })
+    if (newStatus === 'DM_SENT') {
+      contact.dmSentDate = new Date().toISOString().split('T')[0]
+    }
+  } catch {
+    contact.status = old
+    toast.add({ title: 'Failed to update status', color: 'error', icon: 'i-lucide-alert-triangle' })
+  }
+}
+
+async function changeTier(newTier: LITier): Promise<void> {
+  const contact = selectedContact.value
+  if (!contact || contact.tier === newTier) return
+  const old = contact.tier
+  contact.tier = newTier
+  try {
+    await $fetch('/api/linkedin-crm', {
+      method: 'POST',
+      body: { action: 'updateContactTier', contactId: contact.id, tier: newTier },
+    })
+  } catch {
+    contact.tier = old
+    toast.add({ title: 'Failed to change tier', color: 'error', icon: 'i-lucide-alert-triangle' })
+  }
+}
+
+async function saveNotes(): Promise<void> {
+  const contact = selectedContact.value
+  if (!contact) return
+  isSaving.value = true
+  try {
+    await $fetch('/api/linkedin-crm', {
+      method: 'POST',
+      body: { action: 'updateContactNotes', contactId: contact.id, notes: editNotes.value },
+    })
+    contact.notes = editNotes.value
+    toast.add({ title: 'Notes saved', color: 'success', icon: 'i-lucide-check' })
+  } catch {
+    toast.add({ title: 'Failed to save notes', color: 'error', icon: 'i-lucide-alert-triangle' })
+  } finally {
+    isSaving.value = false
+  }
+}
+
+async function submitDM(): Promise<void> {
+  const contact = selectedContact.value
+  if (!contact) return
+  isSaving.value = true
+  try {
+    await $fetch('/api/linkedin-crm', {
+      method: 'POST',
+      body: {
+        action: 'logDM',
+        contactId: contact.id,
+        template: dmTemplate.value,
+        dmStatus: dmStatus.value,
+        skipReason: dmSkipReason.value,
+      },
+    })
+    // Sync local state
+    contact.status = dmStatus.value === 'SENT' ? 'DM_SENT' : 'DM_SKIPPED'
+    if (dmStatus.value === 'SENT') {
+      contact.dmSentDate = new Date().toISOString().split('T')[0]
+      contact.dmTemplate = dmTemplate.value
+    }
+    if (dmStatus.value === 'SKIPPED') {
+      contact.skipReason = dmSkipReason.value
+    }
+    toast.add({ title: `DM ${dmStatus.value === 'SENT' ? 'logged' : 'skipped'}`, color: 'success', icon: 'i-lucide-check' })
+    showDMForm.value = false
+    dmTemplate.value = ''
+    dmSkipReason.value = ''
+    refresh()
+  } catch {
+    toast.add({ title: 'Failed to log DM', color: 'error', icon: 'i-lucide-alert-triangle' })
+  } finally {
+    isSaving.value = false
+  }
+}
+
+function isFollowUpOverdue(dmDate: string | undefined, contactStatus: string): boolean {
+  if (!dmDate || contactStatus === 'RESPONDED' || contactStatus === 'DM_SKIPPED') return false
+  return (Date.now() - new Date(dmDate).getTime()) / 86400000 > 7
+}
+
+function statusColor(s: string): string {
+  switch (s) {
+    case 'CONNECTED': return 'text-green-400 bg-green-500/15'
+    case 'DM_SENT': return 'text-cyan-400 bg-cyan-500/15'
+    case 'RESPONDED': return 'text-primary-400 bg-primary-500/15'
+    case 'PENDING': return 'text-amber-400 bg-amber-500/15'
+    case 'REQUEST_SENT': return 'text-blue-400 bg-blue-500/15'
+    case 'CREATOR_MODE': return 'text-red-400 bg-red-500/15'
+    case 'DM_SKIPPED': return 'text-neutral-500 bg-neutral-800'
+    default: return 'text-neutral-500 bg-neutral-800'
+  }
 }
 </script>
 
@@ -133,6 +288,22 @@ function selectContact(contact: LIContact): void {
           <UIcon :name="tab.icon" class="size-4" />
           {{ tab.label }}
         </button>
+      </div>
+
+      <!-- Pipeline filters -->
+      <div v-if="activeTab === 0" class="flex flex-wrap items-center gap-1.5 mb-4">
+        <button
+          class="px-2 py-1 text-[10px] font-medium rounded-md transition-colors"
+          :class="statusFilter === '' ? 'text-neutral-100 bg-neutral-700' : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/50'"
+          @click="statusFilter = ''"
+        >All</button>
+        <button
+          v-for="s in (['PENDING', 'REQUEST_SENT', 'CONNECTED', 'CREATOR_MODE', 'DM_SENT', 'DM_SKIPPED', 'RESPONDED'] as LIContactStatus[])"
+          :key="s"
+          class="px-2 py-1 text-[10px] font-medium rounded-md transition-colors"
+          :class="statusFilter === s ? statusColor(s) : 'text-neutral-500 hover:text-neutral-300 bg-neutral-800/50'"
+          @click="statusFilter = statusFilter === s ? '' : s"
+        >{{ s.replace(/_/g, ' ') }}</button>
       </div>
 
       <!-- Tab 1: Pipeline -->
@@ -390,35 +561,74 @@ function selectContact(contact: LIContact): void {
       </div>
     </template>
 
-    <!-- Contact detail panel -->
+    <!-- Contact detail panel (editable) -->
     <div v-if="selectedContact" class="fixed inset-0 z-50 flex justify-end">
-      <div class="absolute inset-0 bg-black/60" @click="selectedContact = null" />
+      <div class="absolute inset-0 bg-black/60" @click="closeDetail" />
       <div class="relative w-full max-w-sm bg-neutral-950 border-l border-neutral-800 overflow-y-auto p-6 space-y-4">
+        <!-- Header -->
         <div class="flex items-start justify-between">
           <div>
             <h2 class="text-lg font-bold text-neutral-100">{{ selectedContact.name }}</h2>
             <p class="text-sm text-neutral-400">{{ selectedContact.role }}</p>
           </div>
-          <button class="p-1 text-neutral-500 hover:text-neutral-300" @click="selectedContact = null">
+          <button class="p-1 text-neutral-500 hover:text-neutral-300" @click="closeDetail">
             <UIcon name="i-lucide-x" class="size-4" />
           </button>
         </div>
-        <div class="space-y-3 text-sm">
+
+        <div class="space-y-4 text-sm">
+          <!-- Tier selector -->
           <div class="flex items-center justify-between">
             <span class="text-neutral-500">Tier</span>
-            <span class="font-mono font-bold text-neutral-300">{{ selectedContact.tier }}</span>
+            <div class="flex gap-1">
+              <button
+                v-for="t in (['T0', 'T1', 'T2', 'T3'] as LITier[])"
+                :key="t"
+                class="px-2 py-0.5 text-[10px] font-mono font-bold rounded transition-colors"
+                :class="selectedContact.tier === t ? 'text-primary-400 bg-primary-500/20' : 'text-neutral-600 hover:text-neutral-400 bg-neutral-800/50'"
+                @click="changeTier(t)"
+              >{{ t }}</button>
+            </div>
           </div>
+
+          <!-- Status (clickable to cycle) -->
           <div class="flex items-center justify-between">
             <span class="text-neutral-500">Status</span>
-            <span class="text-neutral-300">{{ selectedContact.status.replace(/_/g, ' ') }}</span>
+            <button
+              class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer"
+              :class="statusColor(selectedContact.status)"
+              title="Click to cycle status"
+              @click="cycleStatus"
+            >
+              {{ selectedContact.status.replace(/_/g, ' ') }}
+              <UIcon name="i-lucide-chevrons-right" class="size-3 opacity-50" />
+            </button>
           </div>
+
+          <!-- Quick status buttons for non-cycle statuses -->
+          <div class="flex flex-wrap gap-1">
+            <button
+              v-for="s in (['CREATOR_MODE', 'DM_SKIPPED'] as LIContactStatus[])"
+              :key="s"
+              class="px-2 py-0.5 text-[10px] font-medium rounded transition-colors"
+              :class="selectedContact.status === s ? statusColor(s) : 'text-neutral-600 hover:text-neutral-400 bg-neutral-800/50'"
+              @click="setStatus(s)"
+            >{{ s.replace(/_/g, ' ') }}</button>
+          </div>
+
+          <!-- Source -->
           <div class="flex items-center justify-between">
             <span class="text-neutral-500">Source</span>
             <span class="text-neutral-300">{{ selectedContact.source }}</span>
           </div>
+
+          <!-- DM info -->
           <div v-if="selectedContact.dmSentDate" class="flex items-center justify-between">
             <span class="text-neutral-500">DM Sent</span>
-            <span class="text-neutral-300 tabular-nums">{{ selectedContact.dmSentDate }}</span>
+            <span class="text-neutral-300 tabular-nums" :class="isFollowUpOverdue(selectedContact.dmSentDate, selectedContact.status) ? 'text-amber-400' : ''">
+              {{ selectedContact.dmSentDate }}
+              <span v-if="isFollowUpOverdue(selectedContact.dmSentDate, selectedContact.status)" class="text-amber-500 text-[9px] ml-1">FOLLOW UP</span>
+            </span>
           </div>
           <div v-if="selectedContact.dmTemplate" class="flex items-center justify-between">
             <span class="text-neutral-500">Template</span>
@@ -428,10 +638,27 @@ function selectContact(contact: LIContact): void {
             <span class="text-neutral-500">Skip Reason</span>
             <span class="text-red-400">{{ selectedContact.skipReason }}</span>
           </div>
-          <div v-if="selectedContact.notes">
+
+          <!-- Notes (editable) -->
+          <div>
             <span class="text-neutral-500 block mb-1">Notes</span>
-            <p class="text-neutral-300 text-xs bg-neutral-800/50 rounded p-2">{{ selectedContact.notes }}</p>
+            <textarea
+              v-model="editNotes"
+              class="w-full text-xs text-neutral-300 bg-neutral-800/50 border border-neutral-700 rounded p-2 resize-y min-h-[60px] focus:outline-none focus:border-primary-500/50"
+              placeholder="Add notes..."
+              rows="3"
+            />
+            <button
+              v-if="editNotes !== selectedContact.notes"
+              class="mt-1.5 px-3 py-1 text-[10px] font-medium rounded bg-primary-500/20 text-primary-400 hover:bg-primary-500/30 transition-colors disabled:opacity-50"
+              :disabled="isSaving"
+              @click="saveNotes"
+            >
+              {{ isSaving ? 'Saving...' : 'Save Notes' }}
+            </button>
           </div>
+
+          <!-- LinkedIn link -->
           <div v-if="selectedContact.linkedinUrl">
             <a
               :href="selectedContact.linkedinUrl"
@@ -441,6 +668,71 @@ function selectContact(contact: LIContact): void {
               <UIcon name="i-lucide-external-link" class="size-3.5" />
               LinkedIn Profile
             </a>
+          </div>
+
+          <!-- Log DM action -->
+          <div class="border-t border-neutral-800 pt-3">
+            <button
+              v-if="!showDMForm"
+              class="flex items-center gap-1.5 text-xs text-cyan-400 hover:text-cyan-300 transition-colors"
+              @click="showDMForm = true"
+            >
+              <UIcon name="i-lucide-send" class="size-3.5" />
+              Log DM
+            </button>
+
+            <!-- DM form -->
+            <div v-else class="space-y-3">
+              <h4 class="text-xs font-semibold text-neutral-300">Log DM</h4>
+
+              <div>
+                <label class="text-[10px] text-neutral-500 block mb-1">Template</label>
+                <input
+                  v-model="dmTemplate"
+                  class="w-full text-xs text-neutral-300 bg-neutral-800/50 border border-neutral-700 rounded px-2 py-1.5 focus:outline-none focus:border-primary-500/50"
+                  placeholder="e.g. DM-T1-SK-02"
+                />
+              </div>
+
+              <div>
+                <label class="text-[10px] text-neutral-500 block mb-1">Status</label>
+                <div class="flex gap-2">
+                  <button
+                    class="flex-1 px-2 py-1 text-[10px] font-medium rounded transition-colors"
+                    :class="dmStatus === 'SENT' ? 'text-cyan-400 bg-cyan-500/20' : 'text-neutral-500 bg-neutral-800'"
+                    @click="dmStatus = 'SENT'"
+                  >SENT</button>
+                  <button
+                    class="flex-1 px-2 py-1 text-[10px] font-medium rounded transition-colors"
+                    :class="dmStatus === 'SKIPPED' ? 'text-red-400 bg-red-500/20' : 'text-neutral-500 bg-neutral-800'"
+                    @click="dmStatus = 'SKIPPED'"
+                  >SKIPPED</button>
+                </div>
+              </div>
+
+              <div v-if="dmStatus === 'SKIPPED'">
+                <label class="text-[10px] text-neutral-500 block mb-1">Skip Reason</label>
+                <input
+                  v-model="dmSkipReason"
+                  class="w-full text-xs text-neutral-300 bg-neutral-800/50 border border-neutral-700 rounded px-2 py-1.5 focus:outline-none focus:border-primary-500/50"
+                  placeholder="e.g. competitor, not relevant"
+                />
+              </div>
+
+              <div class="flex gap-2">
+                <button
+                  class="flex-1 px-3 py-1.5 text-[10px] font-medium rounded bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-colors disabled:opacity-50"
+                  :disabled="isSaving"
+                  @click="submitDM"
+                >
+                  {{ isSaving ? 'Saving...' : 'Submit' }}
+                </button>
+                <button
+                  class="px-3 py-1.5 text-[10px] font-medium rounded text-neutral-500 hover:text-neutral-300 bg-neutral-800 transition-colors"
+                  @click="showDMForm = false"
+                >Cancel</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>

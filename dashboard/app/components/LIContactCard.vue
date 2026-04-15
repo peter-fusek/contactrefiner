@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { LIContact } from '~/server/utils/types'
 
-defineProps<{
+const props = defineProps<{
   contact: LIContact
 }>()
 
@@ -25,11 +25,21 @@ function statusColor(status: string): string {
 function statusLabel(status: string): string {
   return status.replace(/_/g, ' ')
 }
+
+const isFollowUpOverdue = computed(() => {
+  const c = props.contact
+  if (c.status === 'RESPONDED' || c.status === 'DM_SKIPPED') return false
+  if (!c.dmSentDate) return false
+  const sent = new Date(c.dmSentDate)
+  const daysSince = (Date.now() - sent.getTime()) / 86400000
+  return daysSince > 7
+})
 </script>
 
 <template>
   <div
-    class="bg-neutral-900 border border-neutral-800 rounded-lg p-3 hover:border-neutral-700 transition-colors cursor-pointer group"
+    class="bg-neutral-900 border rounded-lg p-3 hover:border-neutral-700 transition-colors cursor-pointer group"
+    :class="isFollowUpOverdue ? 'border-amber-500/40 shadow-[0_0_8px_rgba(245,158,11,0.15)]' : 'border-neutral-800'"
     @click="emit('select', contact)"
   >
     <!-- Name + tier -->
