@@ -12,7 +12,7 @@
 - Render auto-deploys dashboard on push to main (~5min)
 - Cloud Build auto-deploys Cloud Run Job on push to main (~3min); trigger: `deploy-on-push` in europe-west1 (GitHub App on peter-fusek account); uses `--update-env-vars` (NOT `--set-env-vars` which wipes all vars); must include `ENVIRONMENT=cloud`
 - Cloud Build trigger branch pattern must be exactly `^main$` — double-regex (`^main$^main$`) silently breaks auto-deploy
-- GA4 Measurement ID: `G-QFW0D3J3KV` (in nuxt.config.ts head scripts)
+- GA4 Measurement ID: `G-WRBBPFCSPS` (in nuxt.config.ts head scripts)
 
 ## GCP Auth
 - gcloud auth opens Safari by default — must manually copy URL to Chrome (Chrome-only policy)
