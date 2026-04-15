@@ -52,10 +52,13 @@
 - Cache: 60s TTL in-memory Map; `clearCache()` exposed via POST /api/cache-clear
 - Demo masking: `demo.ts` — must handle ALL PII fields including `field === 'contact'` (tobedeleted names)
 - API sub-routes: use directory structure (e.g., `api/config/index.get.ts` + `api/config/pause.post.ts`)
-- Nuxt API routes: ALL endpoints need `isDemoMode()` guard (repo is public, unauthenticated users get empty data)
+- Nuxt API routes: ALL endpoints need `isDemoMode()` guard (repo is public, unauthenticated users get empty data) — exception: `/api/health` is intentionally unauthenticated (non-sensitive aggregate metrics only)
+- Drag-and-drop: CRMColumn uses counter-based dragenter/dragleave (NOT relatedTarget — it's null in Chrome for drag events)
 - Nav order: Status, Review, CRM, LinkedIn, Changelog, Runs, Pipeline, Config (Analytics/Social Signals/FollowUp removed from nav, pages still exist or redirect)
 - LinkedIn CRM: `/linkedin-crm` page — local JSON data via Nitro serverAssets (`useStorage('assets:data')` in production, `readFile` fallback for dev); types in `server/utils/types.ts` (LI* prefix); seed data in `server/data/linkedin-crm.json`
 - LinkedIn CRM data helper: `server/utils/linkedin-crm-data.ts` — `getLinkedInCRMData()` / `saveLinkedInCRMData()`
+- LinkedIn CRM mutations: POST handler with action dispatch (`updateContactStatus`, `updateContactNotes`, `updateContactTier`, `logDM`, `addFollowerSnapshot`); optimistic updates on client, capture contact ref before await
+- LinkedIn CRM storage: Nitro serverAssets (in-memory in production) — writes lost on redeploy; migration to GCS/SQL planned
 - Nitro serverAssets: configured in `nuxt.config.ts` → `nitro.serverAssets` for bundling `server/data/` into production build
 - Security headers: X-Frame-Options DENY, X-Content-Type-Options nosniff via nitro routeRules
 - GCS upload: use `upload_file_to_gcs()` from `utils.py` — shared by linkedin_scanner and followup_scorer
