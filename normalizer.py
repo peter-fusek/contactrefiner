@@ -59,7 +59,11 @@ def fix_diacritics(name: str, memory=None) -> tuple[str, float]:
         pref = memory.get_diacritics_preference(name)
         if pref is not None:
             if pref != name:
-                return pref, 0.97  # Use approved correction
+                # Sanity check: diacritics restoration should share the same ASCII base
+                # (e.g. "Martina" → "Zrníková" is NOT a valid diacritics fix)
+                if unidecode(pref).lower() == unidecode(name).lower():
+                    return pref, 0.97  # Use approved correction
+                # Memory entry is corrupted — ignore it
             return name, 0.0  # User rejected correction — keep original
 
     # Check exact dictionary match (case-insensitive key lookup)
@@ -1093,8 +1097,8 @@ def _title_case_company(name: str) -> str:
         if alpha.upper() in KNOWN_ACRONYMS:
             # Preserve as uppercase, keep non-alpha chars in place
             result_words.append(word.upper())
-        elif len(alpha) <= 2 and alpha.isalpha():
-            # Very short words (AG, SE, AB) — likely acronyms
+        elif 2 <= len(alpha) <= 5 and alpha == alpha.upper() and alpha.isalpha():
+            # Short all-uppercase words (AG, IBM, SAP, NCZI, ESET) — likely acronyms
             result_words.append(word.upper())
         else:
             result_words.append(
