@@ -474,7 +474,7 @@ onUnmounted(() => {
           Review MEDIUM Changes
         </h1>
         <p class="text-xs text-neutral-500 mt-1">
-          {{ allChanges.length }} changes from {{ contactGroups.length }} contacts
+          {{ filteredChanges.length }} changes from {{ contactGroups.length }} contacts
         </p>
       </div>
       <div v-if="!isDemo" class="flex items-center gap-3">
