@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { LICRMResponse, LIContact, LIInstitutionTier } from '~/server/utils/types'
+import type { LICRMResponse, LIContact, LITier, LIInstitution, LIInstitutionTier } from '~/server/utils/types'
 
 useHead({
   title: 'LinkedIn CRM — Contact Refiner',
@@ -19,18 +19,16 @@ const tabs = [
 const search = ref('')
 const selectedContact = ref<LIContact | null>(null)
 
-// Pipeline tab — group contacts by tier
+// Pipeline tab — group contacts by tier (single pass)
 const tierGroups = computed(() => {
-  if (!data.value) return { T0: [], T1: [], T2: [], T3: [] }
-  const contacts = data.value.data.contacts.filter(c =>
-    !search.value || c.name.toLowerCase().includes(search.value.toLowerCase()) || c.role.toLowerCase().includes(search.value.toLowerCase()),
-  )
-  return {
-    T0: contacts.filter(c => c.tier === 'T0'),
-    T1: contacts.filter(c => c.tier === 'T1'),
-    T2: contacts.filter(c => c.tier === 'T2'),
-    T3: contacts.filter(c => c.tier === 'T3'),
+  const groups: Record<LITier, LIContact[]> = { T0: [], T1: [], T2: [], T3: [] }
+  if (!data.value) return groups
+  const q = search.value.toLowerCase()
+  for (const c of data.value.data.contacts) {
+    if (q && !c.name.toLowerCase().includes(q) && !c.role.toLowerCase().includes(q)) continue
+    groups[c.tier].push(c)
   }
+  return groups
 })
 
 // DM tab — stats
@@ -50,15 +48,14 @@ const dmStats = computed(() => {
   }
 })
 
-// Institutions tab — group by tier
+// Institutions tab — group by tier (single pass)
 const institutionGroups = computed(() => {
-  if (!data.value) return { A: [], B: [], C: [] }
-  const insts = data.value.data.institutions
-  return {
-    A: insts.filter(i => i.tier === 'A'),
-    B: insts.filter(i => i.tier === 'B'),
-    C: insts.filter(i => i.tier === 'C'),
+  const groups: Record<LIInstitutionTier, LIInstitution[]> = { A: [], B: [], C: [] }
+  if (!data.value) return groups
+  for (const inst of data.value.data.institutions) {
+    groups[inst.tier].push(inst)
   }
+  return groups
 })
 
 const institutionTierLabels: Record<LIInstitutionTier, string> = {
@@ -73,11 +70,11 @@ const institutionTierColors: Record<LIInstitutionTier, string> = {
   C: 'text-neutral-400',
 }
 
-function categoryLabel(cat: string): string {
-  return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+function categoryLabel(category: string): string {
+  return category.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
-function selectContact(contact: LIContact) {
+function selectContact(contact: LIContact): void {
   selectedContact.value = contact
 }
 </script>

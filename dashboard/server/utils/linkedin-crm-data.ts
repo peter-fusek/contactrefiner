@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import type { LICRMData } from './types'
 
@@ -10,7 +10,7 @@ export async function getLinkedInCRMData(): Promise<LICRMData> {
 
   // Fallback for dev mode: read from filesystem
   const filePath = resolve(process.cwd(), 'server/data/linkedin-crm.json')
-  const raw = readFileSync(filePath, 'utf-8')
+  const raw = await readFile(filePath, 'utf-8')
   return JSON.parse(raw)
 }
 

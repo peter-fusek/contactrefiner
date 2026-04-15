@@ -1,5 +1,5 @@
-import type { LICRMData, LICRMResponse } from '../utils/types'
-import { isDemoMode } from '../utils/demo'
+import type { LICRMData, LICRMResponse, LIContactStatus } from '../utils/types'
+import { isDemoMode, maskName } from '../utils/demo'
 import { getLinkedInCRMData } from '../utils/linkedin-crm-data'
 
 function maskLICRMData(data: LICRMData): LICRMData {
@@ -7,13 +7,13 @@ function maskLICRMData(data: LICRMData): LICRMData {
     ...data,
     contacts: data.contacts.map(c => ({
       ...c,
-      name: c.name.split(' ').map((p, i, a) => i === a.length - 1 && a.length > 1 ? p.charAt(0) + '.' : p).join(' '),
+      name: maskName(c.name),
       linkedinUrl: c.linkedinUrl ? 'https://www.linkedin.com/in/***' : '',
       notes: c.notes ? '[hidden in demo]' : '',
     })),
     dmLog: data.dmLog.map(d => ({
       ...d,
-      contactName: d.contactName.split(' ').map((p, i, a) => i === a.length - 1 && a.length > 1 ? p.charAt(0) + '.' : p).join(' '),
+      contactName: maskName(d.contactName),
     })),
     institutions: data.institutions.map(inst => ({
       ...inst,
@@ -30,12 +30,15 @@ export default defineEventHandler(async (event): Promise<LICRMResponse> => {
   const finalData = demo ? maskLICRMData(data) : data
 
   const contacts = finalData.contacts
-  const connected = contacts.filter(c => c.status === 'CONNECTED').length
-  const pending = contacts.filter(c => c.status === 'PENDING').length
-  const creatorMode = contacts.filter(c => c.status === 'CREATOR_MODE').length
-  const dmsSent = contacts.filter(c => c.status === 'DM_SENT').length
-  const dmsSkipped = contacts.filter(c => c.status === 'DM_SKIPPED').length
-  const responded = contacts.filter(c => c.status === 'RESPONDED').length
+  const statusCounts: Record<string, number> = {}
+  for (const c of contacts) {
+    statusCounts[c.status] = (statusCounts[c.status] ?? 0) + 1
+  }
+
+  function countByStatus(status: LIContactStatus): number {
+    return statusCounts[status] ?? 0
+  }
+
   const latestSnapshot = finalData.followerSnapshots[finalData.followerSnapshots.length - 1]
   const totalSent = finalData.miningRuns.reduce((sum, r) => sum + r.sent, 0)
   const accepted = Math.round(totalSent * 0.88)
@@ -44,12 +47,12 @@ export default defineEventHandler(async (event): Promise<LICRMResponse> => {
     data: finalData,
     stats: {
       totalContacts: contacts.length,
-      connected,
-      pending,
-      creatorMode,
-      dmsSent,
-      dmsSkipped,
-      responded,
+      connected: countByStatus('CONNECTED'),
+      pending: countByStatus('PENDING'),
+      creatorMode: countByStatus('CREATOR_MODE'),
+      dmsSent: countByStatus('DM_SENT'),
+      dmsSkipped: countByStatus('DM_SKIPPED'),
+      responded: countByStatus('RESPONDED'),
       followers: latestSnapshot?.followers ?? 0,
       followerDelta: finalData.followerSnapshots.reduce((sum, s) => sum + (s.delta ?? 0), 0),
       acceptanceRate: `~${Math.round((accepted / totalSent) * 100)}%`,
