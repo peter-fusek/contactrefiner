@@ -53,7 +53,10 @@
 - Demo masking: `demo.ts` — must handle ALL PII fields including `field === 'contact'` (tobedeleted names)
 - API sub-routes: use directory structure (e.g., `api/config/index.get.ts` + `api/config/pause.post.ts`)
 - Nuxt API routes: ALL endpoints need `isDemoMode()` guard (repo is public, unauthenticated users get empty data)
-- Nav order: Status, Review, CRM, Changelog, Runs, Pipeline, Config (Analytics/Social Signals/FollowUp removed from nav, pages still exist or redirect)
+- Nav order: Status, Review, CRM, LinkedIn, Changelog, Runs, Pipeline, Config (Analytics/Social Signals/FollowUp removed from nav, pages still exist or redirect)
+- LinkedIn CRM: `/linkedin-crm` page — local JSON data via Nitro serverAssets (`useStorage('assets:data')` in production, `readFile` fallback for dev); types in `server/utils/types.ts` (LI* prefix); seed data in `server/data/linkedin-crm.json`
+- LinkedIn CRM data helper: `server/utils/linkedin-crm-data.ts` — `getLinkedInCRMData()` / `saveLinkedInCRMData()`
+- Nitro serverAssets: configured in `nuxt.config.ts` → `nitro.serverAssets` for bundling `server/data/` into production build
 - Security headers: X-Frame-Options DENY, X-Content-Type-Options nosniff via nitro routeRules
 - GCS upload: use `upload_file_to_gcs()` from `utils.py` — shared by linkedin_scanner and followup_scorer
 - Bug report: user-controlled screenshots only (paste/upload) — NEVER use DOM-scraping libraries (html2canvas etc.)
