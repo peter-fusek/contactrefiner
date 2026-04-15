@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { LICRMData, LICRMResponse } from '../utils/types'
 import { isDemoMode } from '../utils/demo'
+import { getLinkedInCRMData } from '../utils/linkedin-crm-data'
 
 function maskLICRMData(data: LICRMData): LICRMData {
   return {
@@ -27,10 +26,7 @@ function maskLICRMData(data: LICRMData): LICRMData {
 export default defineEventHandler(async (event): Promise<LICRMResponse> => {
   const demo = await isDemoMode(event)
 
-  const filePath = resolve(process.cwd(), 'server/data/linkedin-crm.json')
-  const raw = readFileSync(filePath, 'utf-8')
-  const data: LICRMData = JSON.parse(raw)
-
+  const data = await getLinkedInCRMData()
   const finalData = demo ? maskLICRMData(data) : data
 
   const contacts = finalData.contacts

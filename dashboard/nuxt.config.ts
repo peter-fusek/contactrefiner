@@ -56,6 +56,10 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+    serverAssets: [{
+      baseName: 'data',
+      dir: './server/data',
+    }],
     routeRules: {
       '/social-signals': { redirect: { to: '/crm', statusCode: 301 } },
       '/followup': { redirect: { to: '/crm', statusCode: 301 } },

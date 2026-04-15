@@ -1,7 +1,6 @@
-import { readFileSync, writeFileSync } from 'node:fs'
-import { resolve } from 'node:path'
 import type { LICRMData } from '../utils/types'
 import { isDemoMode } from '../utils/demo'
+import { getLinkedInCRMData, saveLinkedInCRMData } from '../utils/linkedin-crm-data'
 
 export default defineEventHandler(async (event) => {
   if (await isDemoMode(event)) {
@@ -11,9 +10,7 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { action } = body
 
-  const filePath = resolve(process.cwd(), 'server/data/linkedin-crm.json')
-  const raw = readFileSync(filePath, 'utf-8')
-  const data: LICRMData = JSON.parse(raw)
+  const data = await getLinkedInCRMData()
 
   if (action === 'updateContactStatus') {
     const { contactId, status } = body
@@ -45,7 +42,7 @@ export default defineEventHandler(async (event) => {
   }
 
   data.updatedAt = new Date().toISOString()
-  writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8')
+  await saveLinkedInCRMData(data)
 
   return { success: true }
 })
