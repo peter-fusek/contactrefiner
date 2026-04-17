@@ -473,3 +473,72 @@ export interface LICRMResponse {
     acceptanceRate: string
   }
 }
+
+// --- Lead Signals ---
+
+export type LeadSignalType =
+  | 'promoted_ceo'
+  | 'new_c_level'
+  | 'exec_title'
+  | 'bank_finance'
+  | 'it_modernisation'
+  | 'vibecoding_agentic'
+  | 'recent_job_change'
+
+export type LeadSignalStage = 'candidate' | 'accepted' | 'dismissed'
+
+export type LeadDismissalReason =
+  | 'not_a_fit'
+  | 'already_talked'
+  | 'stale_signal'
+  | 'wrong_geo'
+  | 'other'
+
+export interface LeadDismissal {
+  reason: LeadDismissalReason
+  note: string
+  dismissedAt: string
+}
+
+export interface LeadSignalRecord {
+  stage: LeadSignalStage
+  stageAt: string
+  dismissal?: LeadDismissal
+}
+
+export interface LeadSignalsState {
+  version: 1
+  updatedAt: string
+  contacts: Record<string, LeadSignalRecord>
+}
+
+export interface LeadSignal {
+  resourceName: string
+  name: string
+  score: number
+  rank: number
+  stage: LeadSignalStage
+  signalTypes: LeadSignalType[]
+  org: string
+  title: string
+  lastDetected: string | null
+  linkedinHeadline: string | null
+  linkedinUrl: string | null
+  monthsSinceContact: number | null
+  dismissal: LeadDismissal | null
+}
+
+export interface LeadSignalsResponse {
+  generated: string | null
+  total: number
+  weeklyCap: number
+  candidates: LeadSignal[]
+  backlog: LeadSignal[]
+  dismissed: LeadSignal[]
+  stats: {
+    candidates: number
+    accepted: number
+    dismissed: number
+    bySignalType: Record<string, number>
+  }
+}

@@ -7,6 +7,7 @@ const sidebarOpen = ref(false)
 
 const navItems = [
   { label: 'Status', icon: 'i-lucide-activity', to: '/dashboard' },
+  { label: 'Signals', icon: 'i-lucide-radar', to: '/signals', highlight: true },
   { label: 'Review', icon: 'i-lucide-check-circle', to: '/review', highlight: true },
   { label: 'CRM', icon: 'i-lucide-kanban', to: '/crm' },
   { label: 'LinkedIn', icon: 'i-lucide-linkedin', to: '/linkedin-crm' },

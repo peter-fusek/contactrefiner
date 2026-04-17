@@ -15,6 +15,7 @@ import type {
   LinkedInSignalsFile,
   PipelineConfig,
   CRMState,
+  LeadSignalsState,
 } from './types'
 
 let storage: Storage | null = null
@@ -474,6 +475,26 @@ export async function getCRMStateFresh(): Promise<CRMState> {
 export async function saveCRMState(state: CRMState): Promise<void> {
   state.updatedAt = new Date().toISOString()
   await writeJson('data/crm_state.json', state)
+  clearCache()
+}
+
+// --- Lead Signals State ---
+
+export async function getLeadSignalsState(): Promise<LeadSignalsState> {
+  return cachedRead('lead_signals_state', async () => {
+    const data = await readJson<LeadSignalsState>('data/lead_signals_state.json')
+    return data ?? { version: 1, updatedAt: new Date().toISOString(), contacts: {} }
+  })
+}
+
+export async function getLeadSignalsStateFresh(): Promise<LeadSignalsState> {
+  const data = await readJson<LeadSignalsState>('data/lead_signals_state.json')
+  return data ?? { version: 1, updatedAt: new Date().toISOString(), contacts: {} }
+}
+
+export async function saveLeadSignalsState(state: LeadSignalsState): Promise<void> {
+  state.updatedAt = new Date().toISOString()
+  await writeJson('data/lead_signals_state.json', state)
   clearCache()
 }
 
