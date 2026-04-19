@@ -10,9 +10,8 @@ useHead({
 
 const { data, status, refresh } = useFetch<PipelineRun[]>('/api/pipeline-runs')
 
-let interval: ReturnType<typeof setInterval> | undefined
-onMounted(() => { interval = setInterval(refresh, 60_000) })
-onUnmounted(() => { if (interval) clearInterval(interval) })
+// Refresh every 5min while tab visible (pipeline runs weekly, no value in aggressive polling)
+useVisiblePolling(refresh, 300_000)
 </script>
 
 <template>

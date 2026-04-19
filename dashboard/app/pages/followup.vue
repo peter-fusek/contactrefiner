@@ -88,10 +88,6 @@ function formatGap(months: number): string {
   return `${Math.round(months)}mo`
 }
 
-// Auto-refresh every 120s
-let interval: ReturnType<typeof setInterval>
-onMounted(() => { interval = setInterval(refresh, 120_000) })
-onUnmounted(() => clearInterval(interval))
 </script>
 
 <template>

@@ -1,6 +1,6 @@
 # ContactRefiner
 
-Automated Google Contacts cleaner — SK/CZ diacritics, phone normalization, deduplication, AI-powered analysis (Claude), learning memory, daily Cloud Run scheduling, and a review dashboard.
+Automated Google Contacts cleaner — SK/CZ diacritics, phone normalization, deduplication, AI-powered analysis (Claude), learning memory, weekly Cloud Run scheduling (+ monthly CRM sync), and a review dashboard.
 
 **Live:** [contactrefiner.com](https://contactrefiner.com) | [Privacy Policy](https://contactrefiner.com/privacy)
 
@@ -20,7 +20,7 @@ Automated Google Contacts cleaner — SK/CZ diacritics, phone normalization, ded
 | **Memory** | Cross-session learning — remembers your approval/rejection patterns |
 | **Activity Tagging** | Gmail + Calendar scanning to label contacts by last interaction year |
 | **Review Dashboard** | Web UI for reviewing and approving suggested changes |
-| **Cloud Run** | Docker-based daily job on GCP with queue stats tracking |
+| **Cloud Run** | Docker-based weekly+monthly jobs on GCP with queue stats tracking |
 | **Safety** | Full backup/restore, changelog, rollback, 3-phase pipeline |
 
 ## Pipeline
@@ -118,10 +118,12 @@ entrypoint.py            Cloud Run Job entry point (3-phase pipeline)
 
 ## Cloud Deployment
 
-The refiner runs as a **Cloud Run Job** on Google Cloud, triggered daily by Cloud Scheduler.
+The refiner runs as a **Cloud Run Job** on Google Cloud, triggered by two Cloud Scheduler jobs (cost-minimised cadence, Europe/Bratislava TZ).
 
 ```
-Cloud Scheduler ──(daily 9:00 CET)──> Cloud Run Job
+Cloud Scheduler ──(weekly Sun 03:00 CEE, CADENCE=weekly → phases 0-2)──┐
+                                                                        ├──> Cloud Run Job
+Cloud Scheduler ──(monthly 1st 03:30 CEE, CADENCE=monthly → adds 4+5)──┘
                                         │
                     ┌───────────────────┼───────────┐
                     │                   │           │

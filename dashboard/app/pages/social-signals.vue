@@ -64,10 +64,6 @@ function signalBadge(type: string) {
   }
 }
 
-// Auto-refresh every 120s
-let interval: ReturnType<typeof setInterval>
-onMounted(() => { interval = setInterval(refresh, 120_000) })
-onUnmounted(() => clearInterval(interval))
 </script>
 
 <template>

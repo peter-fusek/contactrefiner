@@ -73,7 +73,7 @@ AI_ENABLED = os.getenv("AI_ENABLED", "true").lower() == "true"
 AI_MODEL = os.getenv("AI_MODEL", "claude-haiku-4-5-20251001")  # Haiku: ~10x cheaper
 AI_CONFIDENCE_REVIEW_THRESHOLD = 0.90  # Send to AI if below this
 AI_MAX_CONTACTS_PER_BATCH = 10         # Contacts per AI API call
-AI_COST_LIMIT_PER_SESSION = 3.00       # USD safety cap per run ($3/day max)
+AI_COST_LIMIT_PER_SESSION = 1.00       # USD safety cap per run (tightened for weekly+monthly cadence)
 
 # ── Auto Mode ─────────────────────────────────────────────────────────
 AUTO_CONFIDENCE_THRESHOLD = 0.90       # Min confidence for auto-apply

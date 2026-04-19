@@ -377,6 +377,13 @@ def run():
     start = datetime.now()
     dry_run = os.getenv("DRY_RUN", "").lower() in ("1", "true", "yes")
     skip_ai = os.getenv("SKIP_AI_REVIEW", "").lower() in ("1", "true", "yes")
+    # Cadence gate: weekly = phases 0-2 only, monthly = add phases 4+5, full = everything
+    cadence = os.getenv("CADENCE", "weekly").lower()
+    if cadence not in ("weekly", "monthly", "full"):
+        logger.warning("Unknown CADENCE=%r, defaulting to 'weekly'", cadence)
+        cadence = "weekly"
+    logger.info("Pipeline cadence: %s", cadence)
+    include_followup_crm = cadence in ("monthly", "full")
 
     # Track run state for pipeline_runs.json
     run_state = {
@@ -587,7 +594,7 @@ def run():
 
     # ── Phase 4 (optional): FollowUp Scoring ────────────────────────
     enable_followup = os.getenv("ENABLE_FOLLOWUP_SCORING", "").lower() in ("1", "true", "yes")
-    if enable_followup:
+    if enable_followup and include_followup_crm:
         logger.info("Phase 4: FollowUp Scoring")
         _p4_start = datetime.now()
         try:
@@ -599,12 +606,14 @@ def run():
             logger.error(f"FollowUp scoring failed (non-fatal): {e}")
             run_state["errors"].append(f"Phase 4: {e}")
             traceback.print_exc()
+    elif enable_followup and not include_followup_crm:
+        logger.info("Phase 4 skipped (CADENCE=%s — phase 4+5 run only on monthly/full)", cadence)
     else:
         logger.info("Phase 4 skipped (ENABLE_FOLLOWUP_SCORING not set)")
 
     # ── Phase 5 (optional): CRM Sync ──────────────────────────────
     enable_crm_sync = os.getenv("ENABLE_CRM_SYNC", "").lower() in ("1", "true", "yes")
-    if enable_crm_sync:
+    if enable_crm_sync and include_followup_crm:
         logger.info("Phase 5: CRM Sync (notes + tags → Google Contacts)")
         _p5_start = datetime.now()
         try:
@@ -620,6 +629,8 @@ def run():
             logger.error(f"CRM sync failed (non-fatal): {e}")
             run_state["errors"].append(f"Phase 5: {e}")
             traceback.print_exc()
+    elif enable_crm_sync and not include_followup_crm:
+        logger.info("Phase 5 skipped (CADENCE=%s — phase 4+5 run only on monthly/full)", cadence)
     else:
         logger.info("Phase 5 skipped (ENABLE_CRM_SYNC not set)")
 

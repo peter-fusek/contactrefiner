@@ -30,6 +30,7 @@
 - Pipeline phases: 0 (review feedback) → 1 (backup, analyze, fix HIGH) → 2 (AI review MEDIUM) → 3 (activity tagging) → 4 (FollowUp scoring) → 5 (CRM sync)
 - Phase 4 gated by `ENABLE_FOLLOWUP_SCORING` env var (**enabled** in Cloud Run since 2026-03-23)
 - Phase 5 gated by `ENABLE_CRM_SYNC` env var (**enabled** in Cloud Run since 2026-03-31) — syncs CRM notes → biographies, tags → contact groups (additive only)
+- `CADENCE` env var (2026-04-19 cost cut): `weekly` = phases 0-2 only, `monthly` = adds 4+5, `full` = everything. Cloud Build default = `weekly`; Cloud Scheduler injects `CADENCE=monthly` for the monthly job. AI cost cap tightened to $1/run in `config.py:76`.
 - GCS is the message bus: workplan → analyze → queue → review → export → apply
 - Review sessions in `data/review_sessions/`, decisions in `data/review_decisions_*.json`
 - Review changeIds: hash `resourceName|field|newVal` only (NOT oldVal — it changes between re-analyses)

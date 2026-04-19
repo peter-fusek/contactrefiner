@@ -15,23 +15,21 @@ const { relativeLabel } = useNextRun(computed(() => status.value?.status))
 
 const recentRuns = computed(() => runs.value?.slice(0, 7) ?? [])
 
-// Poll every 5s when running
-const pollInterval = ref<ReturnType<typeof setInterval>>()
+// Poll every 5s when running AND tab visible (pauses automatically when hidden)
+const { start, stop } = useVisiblePolling(
+  refresh,
+  5000,
+  () => status.value?.status === 'running',
+)
 
 watch(
   () => status.value?.status,
   (s) => {
-    if (pollInterval.value) clearInterval(pollInterval.value)
-    if (s === 'running') {
-      pollInterval.value = setInterval(refresh, 5000)
-    }
+    if (s === 'running') start()
+    else stop()
   },
   { immediate: true },
 )
-
-onUnmounted(() => {
-  if (pollInterval.value) clearInterval(pollInterval.value)
-})
 
 function formatDuration(seconds: number | null) {
   if (!seconds) return '--'
