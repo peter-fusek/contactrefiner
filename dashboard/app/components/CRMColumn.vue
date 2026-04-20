@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { CRMContact, CRMStage } from '~/server/utils/types'
 
-defineProps<{
+const props = defineProps<{
   stage: CRMStage
   label: string
   contacts: CRMContact[]
@@ -15,22 +15,37 @@ const emit = defineEmits<{
 }>()
 
 const dragOver = ref(false)
-// Counter-based drag tracking — relatedTarget is unreliable on drag events in Chrome
-// Increment on dragenter, decrement on dragleave, highlight when > 0
+const columnEl = ref<HTMLElement | null>(null)
+
+// Use currentTarget.contains(relatedTarget) as primary check; fall back to a
+// counter for Chrome where relatedTarget is sometimes null. Both dragenter and
+// dragover must preventDefault for the column to be a valid drop target.
 let dragCounter = 0
 
 function onDragEnter(e: DragEvent) {
   e.preventDefault()
+  e.stopPropagation()
   dragCounter++
   dragOver.value = true
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 }
 
 function onDragOver(e: DragEvent) {
+  // Must preventDefault so the column is a valid drop target. Do NOT
+  // stopPropagation — the parent kanban's auto-scroll handler needs this event.
   e.preventDefault()
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move'
 }
 
-function onDragLeave() {
+function onDragLeave(e: DragEvent) {
+  const related = e.relatedTarget as Node | null
+  // If we know the destination AND it's outside the column, we truly left.
+  if (related && !columnEl.value?.contains(related)) {
+    dragCounter = 0
+    dragOver.value = false
+    return
+  }
+  // Chrome: relatedTarget is null during drag — fall back to counter.
   dragCounter--
   if (dragCounter <= 0) {
     dragCounter = 0
@@ -38,23 +53,40 @@ function onDragLeave() {
   }
 }
 
-function onDrop(e: DragEvent, stage: CRMStage) {
+function onDrop(e: DragEvent) {
   e.preventDefault()
+  e.stopPropagation()
   dragCounter = 0
   dragOver.value = false
   const resourceName = e.dataTransfer?.getData('text/plain')
-  if (resourceName) emit('drop', resourceName, stage)
+  if (resourceName) emit('drop', resourceName, props.stage)
 }
+
+// Reset state if a drag ends anywhere (e.g. cancelled with Esc or dropped
+// on a non-target) — prevents stale highlight/counter from breaking the
+// next drag.
+function resetDragState() {
+  dragCounter = 0
+  dragOver.value = false
+}
+
+onMounted(() => {
+  document.addEventListener('dragend', resetDragState)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('dragend', resetDragState)
+})
 </script>
 
 <template>
   <div
+    ref="columnEl"
     class="flex flex-col min-w-[80vw] sm:min-w-[260px] max-w-[300px] shrink-0 rounded-xl border transition-colors snap-center"
     :class="dragOver ? 'border-primary-500/50 bg-primary-500/5' : 'border-neutral-800 bg-neutral-900/30'"
     @dragenter="onDragEnter"
     @dragover="onDragOver"
     @dragleave="onDragLeave"
-    @drop="onDrop($event, stage)"
+    @drop="onDrop"
   >
     <!-- Header -->
     <div class="flex items-center justify-between px-3 py-2.5 border-b border-neutral-800/50">
