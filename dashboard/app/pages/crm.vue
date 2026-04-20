@@ -81,33 +81,47 @@ function onKanbanDragOver(e: DragEvent) {
   }
 }
 
+// Replace a contact's stage and force reactivity by reassigning data.value
+// with a new response object (Nuxt's useFetch can wrap payload in shallowRef
+// after hydration, so nested property mutation is unreliable).
+function setContactStage(resourceName: string, stage: CRMStage): CRMStage | undefined {
+  if (!data.value) return undefined
+  const idx = data.value.contacts.findIndex(c => c.resourceName === resourceName)
+  if (idx === -1) return undefined
+  const current = data.value.contacts[idx]
+  if (!current || current.stage === stage) return undefined
+  const oldStage = current.stage
+  const updated = { ...current, stage }
+  const nextContacts = [...data.value.contacts]
+  nextContacts[idx] = updated
+  data.value = { ...data.value, contacts: nextContacts }
+  if (selectedContact.value?.resourceName === resourceName) {
+    selectedContact.value = updated
+  }
+  return oldStage
+}
+
 async function handleDrop(resourceName: string, stage: CRMStage) {
-  // Optimistic update
-  const contact = data.value?.contacts.find(c => c.resourceName === resourceName)
-  if (contact && contact.stage !== stage) {
-    const oldStage = contact.stage
-    contact.stage = stage
-    try {
-      await $fetch('/api/crm/update', { method: 'POST', body: { resourceName, stage } })
-      // Refetch to auto-refill inbox with next top-scored contacts
-      if (oldStage === 'inbox' || stage === 'inbox') refresh()
-    } catch {
-      contact.stage = oldStage
-      toast.add({ title: 'Failed to move contact', color: 'error', icon: 'i-lucide-alert-triangle' })
-    }
+  const oldStage = setContactStage(resourceName, stage)
+  if (!oldStage) return
+  try {
+    await $fetch('/api/crm/update', { method: 'POST', body: { resourceName, stage } })
+    // Refetch to auto-refill inbox with next top-scored contacts
+    if (oldStage === 'inbox' || stage === 'inbox') refresh()
+  } catch {
+    setContactStage(resourceName, oldStage)
+    toast.add({ title: 'Failed to move contact', color: 'error', icon: 'i-lucide-alert-triangle' })
   }
 }
 
 async function handleReachOut(resourceName: string) {
-  const contact = data.value?.contacts.find(c => c.resourceName === resourceName)
-  if (!contact || contact.stage === 'reached_out') return
-  const oldStage = contact.stage
-  contact.stage = 'reached_out'
+  const oldStage = setContactStage(resourceName, 'reached_out')
+  if (!oldStage) return
   try {
     await $fetch('/api/crm/update', { method: 'POST', body: { resourceName, stage: 'reached_out' } })
     if (oldStage === 'inbox') refresh()
   } catch {
-    contact.stage = oldStage
+    setContactStage(resourceName, oldStage)
     toast.add({ title: 'Failed to move contact', color: 'error', icon: 'i-lucide-alert-triangle' })
   }
 }
@@ -162,17 +176,18 @@ async function saveContact() {
 
 async function moveContact(stage: CRMStage) {
   if (!selectedContact.value) return
-  const oldStage = selectedContact.value.stage
-  selectedContact.value.stage = stage
+  const resourceName = selectedContact.value.resourceName
+  const oldStage = setContactStage(resourceName, stage)
+  if (!oldStage) return
   try {
     await $fetch('/api/crm/update', {
       method: 'POST',
-      body: { resourceName: selectedContact.value.resourceName, stage },
+      body: { resourceName, stage },
     })
     // Refetch to auto-refill inbox with next top-scored contacts
     if (oldStage === 'inbox' || stage === 'inbox') refresh()
   } catch {
-    selectedContact.value.stage = oldStage
+    setContactStage(resourceName, oldStage)
     toast.add({ title: 'Failed to move contact', color: 'error', icon: 'i-lucide-alert-triangle' })
   }
 }
