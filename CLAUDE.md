@@ -54,7 +54,8 @@
 - Demo masking: `demo.ts` — must handle ALL PII fields including `field === 'contact'` (tobedeleted names)
 - API sub-routes: use directory structure (e.g., `api/config/index.get.ts` + `api/config/pause.post.ts`)
 - Nuxt API routes: ALL endpoints need `isDemoMode()` guard (repo is public, unauthenticated users get empty data) — exception: `/api/health` is intentionally unauthenticated (non-sensitive aggregate metrics only)
-- Drag-and-drop: CRMColumn uses counter-based dragenter/dragleave (NOT relatedTarget — it's null in Chrome for drag events)
+- Drag-and-drop: CRMColumn uses counter-based dragenter/dragleave (NOT relatedTarget — it's null in Chrome for drag events); document-level `dragend` listener resets stuck state between drags
+- Nuxt `useFetch` reactivity gotcha (#147): nested-property mutation on `data.value` can silently miss tracking after hydration. For optimistic updates, reassign `data.value = { ...data.value, contacts: nextArray }` with a fresh object — never mutate `contact.foo = bar` directly. See `setContactStage()` in `crm.vue`.
 - Nav order: Status, Signals, Review, CRM, LinkedIn, Changelog, Runs, Pipeline, Config (Analytics/Social Signals/FollowUp removed from nav, pages still exist or redirect)
 - /signals page (Sprint 3.30): derives 7 signal-type badges from followup_scores.json + LinkedIn; candidates/backlog/dismissed tabs; 100/week cap; accept→CRM inbox, dismiss with preset reason; derivation logic in `server/utils/lead-signals.ts`; state in `data/lead_signals_state.json` (GCS)
 - Business-first scoring (#141): FollowUp scoring caps `months_gap` at 24mo, adds exec-title bonus (+15), penalises personal contacts (×0.3 when no org/title/LinkedIn + personal email only), excludes own-company (Instarea), drops 5yr silent unless valid LinkedIn job_change (≥15-char headline); constants in config.py `FOLLOWUP_*`
