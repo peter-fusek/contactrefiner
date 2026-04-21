@@ -3,19 +3,23 @@
 Google Contacts Cleanup Tool — Main CLI Entry Point.
 
 Usage:
-    python main.py auth           # Setup OAuth and test connection
-    python main.py backup         # Create a full backup
-    python main.py analyze        # Analyze contacts and generate workplan
-    python main.py fix            # Apply fixes interactively (batch approval)
-    python main.py verify         # Verify changes against backup
-    python main.py rollback       # Rollback changes from changelog
-    python main.py resume         # Resume from last checkpoint
-    python main.py info           # Show session/backup/workplan info
-    python main.py auth-activity  # Authenticate for Gmail+Calendar scanning
-    python main.py tag-activity   # Scan interactions and assign year labels
-    python main.py ltns           # Identify LTNS contacts and generate reconnect prompts
-    python main.py linkedin-scan  # Scan LinkedIn profiles for social signals
-    python main.py followup       # Score FollowUp candidates (LinkedIn + interaction signals)
+    python main.py auth                 # Setup OAuth and test connection
+    python main.py backup               # Create a full backup
+    python main.py analyze              # Analyze contacts and generate workplan
+    python main.py fix                  # Apply fixes interactively (batch approval)
+    python main.py verify               # Verify changes against backup
+    python main.py rollback             # Rollback changes from changelog
+    python main.py resume               # Resume from last checkpoint
+    python main.py info                 # Show session/backup/workplan info
+    python main.py auth-activity        # Authenticate for Gmail+Calendar scanning
+    python main.py tag-activity         # Scan interactions and assign year labels
+    python main.py ltns                 # Identify LTNS contacts and generate reconnect prompts
+    python main.py linkedin-scan        # Scan LinkedIn profiles for social signals
+    python main.py followup             # Score FollowUp candidates (LinkedIn + interaction signals)
+    python main.py harvest-messages     # Omnichannel harvester (Beeper + iMessage → GCS)
+                   --incremental | --reconcile [--since=24h] | --backfill --source=beeper
+    python main.py backfill-beeper      # Alias for harvest-messages --backfill --source=beeper
+    python main.py score-interactions   # Derive ContactKPIs from harvested interactions
 """
 import os
 import sys
@@ -1083,9 +1087,10 @@ def cmd_followup(skip_scan=False, dry_run=False, no_prompts=False):
     from auth import authenticate, authenticate_for_activity
     from interaction_scanner import InteractionScanner
     from followup_scorer import (
+        build_followup_scores_json,
+        load_contact_kpis,
         load_linkedin_signals,
         score_contacts,
-        build_followup_scores_json,
         upload_followup_scores_to_gcs,
     )
 
@@ -1144,6 +1149,13 @@ def cmd_followup(skip_scan=False, dry_run=False, no_prompts=False):
         print(f"   {types}")
     print()
 
+    # Step 3b: Load ContactKPI rollups from harvester (#150). Graceful fallback
+    # to {} when file is missing / schema-mismatched — scoring stays pre-Beeper.
+    contact_kpis = load_contact_kpis()
+    if contact_kpis:
+        print(f"📨 Beeper ContactKPIs loaded: {len(contact_kpis)}")
+        print()
+
     # Step 4: Score candidates
     print("📊 Scoring FollowUp candidates...")
     scored = score_contacts(
@@ -1151,6 +1163,7 @@ def cmd_followup(skip_scan=False, dry_run=False, no_prompts=False):
         interactions=scanner._interactions,
         contact_emails=scanner._contact_emails,
         linkedin_signals=linkedin_signals,
+        contact_kpis=contact_kpis,
         top_n=FOLLOWUP_TOP_N,
     )
 
@@ -1359,6 +1372,129 @@ def cmd_linkedin_scan(skip_scan=False, dry_run=False, limit=100, groups=None):
     return targets
 
 
+def cmd_harvest_messages(
+    mode: str = "incremental",
+    since: str | None = None,
+    source: str | None = None,
+) -> int:
+    """Run the omnichannel harvester.
+
+    mode:
+      - "incremental" — since=last cursor (or 24h ago if first run), until=now
+      - "reconcile"   — re-pull the last `since` window (default 24h)
+      - "backfill"    — full-history, only for readers listed in `source`
+
+    Returns the number of new records written (0 when paused or no sources).
+    """
+    from datetime import timedelta
+    from harvester.pipeline import run_harvest
+
+    print("📨 Omnichannel Harvester")
+    print("=" * 50)
+    print()
+
+    since_delta = _parse_since_to_timedelta(since) if since else None
+    backfill_sources = tuple(s.strip() for s in source.split(",")) if source else None
+
+    if mode not in ("incremental", "reconcile", "backfill"):
+        print(f"❌ Unknown harvest mode: {mode}")
+        return 0
+    if mode == "backfill" and not backfill_sources:
+        print("❌ --backfill requires --source=<reader>[,<reader>]")
+        return 0
+
+    summary = run_harvest(
+        mode=mode,
+        since_timedelta=since_delta,
+        backfill_sources=backfill_sources,
+    )
+
+    print()
+    if summary.paused:
+        print("⏸  Harvester paused (pipeline_paused.json set). Exited cleanly.")
+        return 0
+
+    print(f"  Mode:          {summary.mode}")
+    print(f"  Since:         {summary.since or '(none)'}")
+    print(f"  Until:         {summary.until}")
+    print(f"  Readers ran:   {', '.join(summary.readers_ran) or '(none)'}")
+    if summary.readers_skipped:
+        print(f"  Readers off:   {', '.join(summary.readers_skipped)}")
+    print(f"  Records seen:  {summary.records_seen}")
+    print(f"  Records new:   {summary.records_new}")
+    print(f"  Matched:       {summary.records_matched}")
+    print(f"  Unmatched:     {summary.records_unmatched}")
+    if summary.records_by_channel:
+        print(f"  By channel:    {summary.records_by_channel}")
+    if summary.partitions_written:
+        print(f"  Partitions:    {summary.partitions_written}")
+    if summary.errors:
+        print(f"  Errors:        {len(summary.errors)}")
+        for e in summary.errors[:5]:
+            print(f"    - {e}")
+    print()
+    return summary.records_new
+
+
+def _parse_since_to_timedelta(raw: str):
+    """Parse a shorthand duration: `24h`, `7d`, `30m`. Returns a timedelta.
+
+    Raises ValueError on malformed input so the CLI fails loudly rather
+    than silently defaulting to 24h. Callers pass the user's literal.
+    """
+    from datetime import timedelta
+    s = raw.strip().lower()
+    if not s:
+        raise ValueError(f"--since value is empty")
+    unit = s[-1]
+    try:
+        num = float(s[:-1])
+    except ValueError:
+        raise ValueError(f"--since must be a number + unit (e.g. 24h, 7d, 30m): {raw!r}")
+    if unit == "h":
+        return timedelta(hours=num)
+    if unit == "d":
+        return timedelta(days=num)
+    if unit == "m":
+        return timedelta(minutes=num)
+    raise ValueError(f"--since unit must be one of h/d/m: {raw!r}")
+
+
+def cmd_backfill_beeper() -> int:
+    """Full-history Beeper backfill — one-shot at install time.
+
+    Thin wrapper around `harvest-messages --backfill --source=beeper`
+    so the launchd weekly plist can invoke a single subcommand.
+    """
+    return cmd_harvest_messages(mode="backfill", source="beeper")
+
+
+def cmd_score_interactions() -> int:
+    """Derive ContactKPI rollups from data/interactions/*.jsonl.
+
+    Reads every monthly partition, groups by contactId, runs
+    `scoring_signals.derive_all_kpis`, writes
+    `data/interactions/contact_kpis.json`, and uploads to GCS.
+
+    Exit code 0 on success; 1 on error. Returns the count of contacts
+    scored for the caller's convenience.
+    """
+    from harvester.pipeline import score_interactions_cli
+
+    print("📊 Score Interactions — Derive ContactKPIs")
+    print("=" * 50)
+    print()
+
+    result = score_interactions_cli()
+    print(f"  Total records:    {result['total_records']}")
+    print(f"  Unmatched:        {result['unmatched_records']}")
+    print(f"  Contacts scored:  {result['contacts_scored']}")
+    print(f"  Output:           {result['out_path']}")
+    print()
+    print("✅ Done.")
+    return result["contacts_scored"]
+
+
 def cmd_crm_sync(dry_run=False):
     """Sync CRM notes and tags from dashboard to Google Contacts."""
     from crm_sync import run_crm_sync
@@ -1446,6 +1582,7 @@ def main():
             "verify", "rollback", "resume", "info",
             "auth-activity", "tag-activity", "ltns", "followup",
             "linkedin-match", "linkedin-scan", "crm-sync", "refresh-tables",
+            "harvest-messages", "backfill-beeper", "score-interactions",
         ],
         help="Command to execute",
     )
@@ -1458,6 +1595,12 @@ def main():
     parser.add_argument("--limit", type=int, default=100, help="Max profiles to scan (for linkedin-scan)")
     parser.add_argument("--write-notes", action="store_true", help="Write cached scan results to notes (for linkedin-scan)")
     parser.add_argument("--groups", type=str, help="Comma-separated group names to filter targets (for linkedin-scan, e.g. Y2025,Y2026)")
+    # harvest-messages flags — mutually-exclusive modes implemented via three flags.
+    parser.add_argument("--incremental", action="store_true", help="harvest-messages: since=cursor mode (default)")
+    parser.add_argument("--reconcile", action="store_true", help="harvest-messages: re-pull recent window ignoring cursor")
+    parser.add_argument("--backfill", action="store_true", help="harvest-messages: full-history; requires --source")
+    parser.add_argument("--since", type=str, help="harvest-messages --reconcile: lookback window, e.g. 24h / 7d / 30m")
+    parser.add_argument("--source", type=str, help="harvest-messages --backfill: reader name(s), e.g. beeper or beeper,imessage")
 
     args = parser.parse_args()
 
@@ -1520,6 +1663,19 @@ def main():
             )
         elif command == "crm-sync":
             cmd_crm_sync(dry_run=args.dry_run)
+        elif command == "harvest-messages":
+            # Default is --incremental. --reconcile and --backfill override.
+            if args.backfill:
+                mode = "backfill"
+            elif args.reconcile:
+                mode = "reconcile"
+            else:
+                mode = "incremental"
+            cmd_harvest_messages(mode=mode, since=args.since, source=args.source)
+        elif command == "backfill-beeper":
+            cmd_backfill_beeper()
+        elif command == "score-interactions":
+            cmd_score_interactions()
         elif command in simple_commands:
             simple_commands[command]()
         else:
