@@ -29,7 +29,10 @@ Derived per-contact rollups computed from `data/interactions/*.jsonl` by `harves
   "stale_sent_count": 2,                   // my outbound msgs >7d without reply
   "channel_primary": "whatsapp",           // network with most exchange in 90d
   "first_seen_ts": "2024-11-03T08:44:01Z", // earliest interaction across any channel
-  "computedAt": "2026-04-21T06:00:00Z"
+  "last_inbound_ever_ts": "2025-08-11T14:00:00Z",  // unbounded; drives long-silence penalty
+  "last_outbound_ever_ts": "2026-04-18T09:05:00Z", // unbounded
+  "computedAt": "2026-04-21T06:00:00Z",
+  "schema_version": 1
 }
 ```
 
@@ -77,6 +80,10 @@ Three fixed windows: `30d`, `90d`, `365d`, computed at harvest time (`now - wind
 ### first_seen_ts
 
 - Minimum timestamp across all interactions with this contact, all channels, all time. Populated on first computation and preserved.
+
+### last_inbound_ever_ts / last_outbound_ever_ts
+
+- Maximum timestamp of any inbound (resp. outbound) record with this contact, unbounded by window. Required so the long-silence penalty fires for contacts whose last inbound predates the 365d window (e.g. 2-year-silent contact has empty windows but `last_inbound_ever_ts` populated). Without this, `compute_beeper_bonus` would silently under-penalize dormant contacts.
 
 ## Score formula additions
 

@@ -690,6 +690,35 @@ FOLLOWUP_OWN_COMPANY_DOMAINS = ("instarea.com", "instarea.sk")  # Peter's own �
 FOLLOWUP_OWN_COMPANY_ORG_KEYWORDS = ("instarea",)
 FOLLOWUP_MAX_AGE_MONTHS = 60.0  # Drop contacts whose last interaction is older than 5 years
 
+# ── Multi-channel Beeper scoring (#150) ─────────────────────────────────────
+# Weights applied to ContactKPI rollups computed by harvester/scoring_signals.py
+# from data/interactions/*.jsonl. See docs/schemas/scoring-signals.md for derivation.
+# Cap FOLLOWUP_BEEPER_MAX protects long-term LinkedIn context from being
+# drowned by short-term message activity.
+FOLLOWUP_BEEPER_AWAITING_MY_REPLY = 15.0      # They wrote me, I haven't replied — most actionable
+FOLLOWUP_BEEPER_MULTICHANNEL = 10.0           # ≥2 distinct channels active in 30d
+FOLLOWUP_BEEPER_BUSINESS_KEYWORDS = 20.0      # "meeting"|"demo"|"price"|"proposal"|… hit in 30d
+FOLLOWUP_BEEPER_BUSINESS_HOURS = 5.0          # business-hours ratio ≥ 0.7 in 30d
+FOLLOWUP_BEEPER_INBOUND_HEAVY = 8.0           # (in - out) > 5 in 30d — they want something
+FOLLOWUP_BEEPER_STALE_SENT_PENALTY = -10.0    # I'm spamming without reply (3+ stale sent msgs)
+FOLLOWUP_BEEPER_LONG_SILENCE_PENALTY = -15.0  # Last inbound > 180d
+FOLLOWUP_BEEPER_MAX = 40.0                    # Upper cap on total beeper_bonus
+FOLLOWUP_BEEPER_MIN = -20.0                   # Lower cap on total beeper_bonus
+FOLLOWUP_BEEPER_KPI_FILE = DATA_DIR / "interactions" / "contact_kpis.json"
+FOLLOWUP_BEEPER_BUSINESS_HOURS_TZ = "Europe/Bratislava"
+FOLLOWUP_BEEPER_BUSINESS_HOURS_START = 9       # 09:00 local
+FOLLOWUP_BEEPER_BUSINESS_HOURS_END = 18        # 18:00 local
+FOLLOWUP_BEEPER_STALE_SENT_DAYS = 7            # Outbound counted as "stale" after N days without reply
+FOLLOWUP_BEEPER_LONG_SILENCE_DAYS = 180        # Trigger FOLLOWUP_BEEPER_LONG_SILENCE_PENALTY
+FOLLOWUP_BEEPER_BUSINESS_HOURS_RATIO = 0.7     # Trigger FOLLOWUP_BEEPER_BUSINESS_HOURS weight
+FOLLOWUP_BEEPER_INBOUND_HEAVY_DELTA = 5        # (msgs_in - msgs_out) threshold in 30d
+FOLLOWUP_BEEPER_STALE_SENT_MIN_COUNT = 3       # Trigger stale-sent penalty
+FOLLOWUP_BEEPER_BUSINESS_KEYWORDS_LIST = (
+    "meeting", "demo", "price", "pricing", "proposal", "quote",
+    "invoice", "contract", "payment", "deal", "kickoff", "timeline",
+    "scope", "sow", "rfp", "po", "offer", "agreement",
+)
+
 # ── PSČ Patterns ───────────────────────────────────────────────────────────
 # Slovak PSČ: 0xxxx, 8xxxx, 9xxxx
 # Czech PSČ: 1xxxx-7xxxx
