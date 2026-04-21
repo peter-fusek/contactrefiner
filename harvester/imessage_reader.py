@@ -256,11 +256,13 @@ class IMessageReader:
 
     # ── internals ───────────────────────────────────────────────────────
     def _open_ro(self) -> sqlite3.Connection:
-        # `immutable=1` speeds reads and tells SQLite no concurrent writer
-        # exists — which is a lie when Messages.app is running, but our
-        # read-only intent plus uri mode prevents any lock acquisition.
+        # `mode=ro` prevents any write lock acquisition. We deliberately do
+        # NOT set `immutable=1` — that would lie to SQLite about whether
+        # Messages.app is writing, which on WAL-mode databases can yield
+        # mid-write snapshots or stale reads. ro is sufficient for our
+        # read-only metadata harvest.
         conn = sqlite3.connect(
-            f"file:{self.config.db_path}?mode=ro&immutable=1", uri=True
+            f"file:{self.config.db_path}?mode=ro", uri=True
         )
         conn.row_factory = sqlite3.Row
         return conn
@@ -324,14 +326,31 @@ class IMessageReader:
             ORDER BY m.date ASC
         """
 
+        skipped = 0
+        total = 0
         for row in conn.execute(sql, params):
+            total += 1
             try:
                 record = self._row_to_record(row)
                 if record is not None:
                     yield record
             except Exception as e:
-                logger.debug(f"iMessage reader: skip row {row['message_id']}: {e}")
+                # Elevated from DEBUG to WARNING per review — a silent
+                # per-row except here could hide a systematic bug (e.g.
+                # schema change after macOS upgrade) that zeros out entire
+                # harvest runs without anyone noticing.
+                skipped += 1
+                logger.warning(
+                    f"iMessage reader: row {row['message_id']} skipped: {e}"
+                )
                 continue
+        if total > 0 and skipped / total > 0.05:
+            logger.error(
+                f"iMessage reader: {skipped}/{total} rows skipped "
+                f"({100*skipped/total:.1f}%) — investigate schema/format drift"
+            )
+        elif skipped > 0:
+            logger.info(f"iMessage reader: {skipped}/{total} rows skipped (tolerable)")
 
     def _row_to_record(self, row: sqlite3.Row) -> Optional[dict]:
         service = row["service"]

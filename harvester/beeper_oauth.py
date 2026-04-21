@@ -65,9 +65,18 @@ logger = logging.getLogger("contacts-refiner.beeper_oauth")
 # for testing against mocks. Never set to a non-loopback value.
 DEFAULT_ISSUER = "http://localhost:23373"
 
-# Default location for the persisted token. Matches the project's existing
-# `token*.json` convention at repo root (already gitignored).
-DEFAULT_TOKEN_PATH = Path("token_beeper.json")
+# Default location for the persisted token. Absolute path anchored to the
+# repo's `data/` directory — gitignored via existing `data/` rule, and
+# stable across invocation CWD (launchd sets CWD=/ by default, which
+# would otherwise land tokens in unwritable / or wrong directories).
+# Override via the BEEPER_TOKEN_PATH env var for testing / non-default installs.
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_TOKEN_PATH = Path(
+    __import__("os").environ.get(
+        "BEEPER_TOKEN_PATH",
+        str(_REPO_ROOT / "data" / "token_beeper.json"),
+    )
+)
 
 # Name this client registers under inside Beeper's Approved Connections.
 CLIENT_NAME = "contactrefiner-harvester"
@@ -280,6 +289,7 @@ class _CallbackServer(http.server.HTTPServer):
     """Single-shot HTTP server that captures the OAuth redirect."""
     result: dict = {}
     expected_state: str = ""
+    code_captured: bool = False
 
 
 class _CallbackHandler(http.server.BaseHTTPRequestHandler):
@@ -291,6 +301,23 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         params = dict(urllib.parse.parse_qsl(parsed.query))
         server: _CallbackServer = self.server  # type: ignore[assignment]
+
+        # Ignore favicon / static requests so they don't overwrite result.
+        if parsed.path not in ("/callback", "/"):
+            self.send_response(404)
+            self.end_headers()
+            return
+
+        # Once a valid code has been captured, refuse to overwrite it.
+        # Second requests (browser favicon fetch, user refresh, an attacker
+        # racing us on localhost) get a 200 with the "already authorized"
+        # page but do not touch server.result.
+        if server.code_captured:
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            self.wfile.write(b"<h1>Already authorized</h1>")
+            return
 
         # State check prevents CSRF on the callback.
         if params.get("state") != server.expected_state:
@@ -315,7 +342,15 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
             )
             return
 
-        server.result = {"code": params.get("code", "")}
+        code = params.get("code", "")
+        if not code:
+            server.result = {"error": "missing_code"}
+            self.send_response(400)
+            self.end_headers()
+            return
+
+        server.result = {"code": code}
+        server.code_captured = True
         self.send_response(200)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.end_headers()
@@ -325,26 +360,24 @@ class _CallbackHandler(http.server.BaseHTTPRequestHandler):
         )
 
 
-def _run_authorization_flow(
-    issuer: str, client_id: str, scopes: str, *, open_browser: bool = True,
-) -> tuple[str, str, str]:
-    """Run the interactive OAuth authorization code flow.
+def _run_authorization_flow_on_server(
+    *, server: "_CallbackServer",
+    issuer: str, client_id: str, redirect_uri: str,
+    scopes: str, open_browser: bool = True,
+) -> tuple[str, str]:
+    """Run the interactive OAuth flow on an already-bound loopback server.
 
-    Returns: (code, code_verifier, redirect_uri). Blocks until the user
-    completes the browser flow.
+    The caller is responsible for binding the server (so it knows the
+    redirect_uri to register with Beeper). This function: generates PKCE,
+    opens the browser, waits for the callback, shuts down the server.
+
+    Returns (code, code_verifier).
     """
     verifier, challenge = generate_pkce_pair()
     state = secrets.token_urlsafe(16)
-
-    # Bind the loopback server first so we know our actual port.
-    server = _CallbackServer(("127.0.0.1", 0), _CallbackHandler)
-    port = server.server_address[1]
     server.expected_state = state
-    redirect_uri = f"http://127.0.0.1:{port}/callback"
+    server.code_captured = False
 
-    # Before opening browser, ensure the chosen redirect URI is registered
-    # under this client — otherwise /oauth/authorize rejects immediately.
-    # We don't re-register here (caller is responsible); we just build the URL.
     authorize_url = build_authorize_url(
         issuer=issuer, client_id=client_id, redirect_uri=redirect_uri,
         code_challenge=challenge, state=state, scopes=scopes,
@@ -358,7 +391,6 @@ def _run_authorization_flow(
         print(f"  If the browser does not open, visit:\n    {authorize_url}")
         if open_browser:
             webbrowser.open(authorize_url)
-        # Wait up to 5 minutes for the callback.
         import time
         deadline = time.monotonic() + 300
         while not server.result and time.monotonic() < deadline:
@@ -370,23 +402,60 @@ def _run_authorization_flow(
                 f"Authorization failed: {server.result['error']} "
                 f"{server.result.get('description', '')}"
             )
-        code = server.result["code"]
-        return code, verifier, redirect_uri
+        return server.result["code"], verifier
     finally:
-        server.shutdown()
-        server.server_close()
+        # shutdown() blocks until serve_forever returns. Give it up to 2s
+        # via a short-lived watchdog so a wedged server doesn't hang CLI exit.
+        import threading as _t
+        watchdog = _t.Timer(2.0, lambda: server.socket.close())
+        watchdog.daemon = True
+        watchdog.start()
+        try:
+            server.shutdown()
+        finally:
+            watchdog.cancel()
+            try:
+                server.server_close()
+            except Exception:  # socket may already be closed by watchdog
+                pass
+
+
+def is_beeper_reachable(
+    issuer: str = DEFAULT_ISSUER, timeout_seconds: float = 2.0,
+) -> bool:
+    """Return True iff the Beeper Desktop API is listening on `issuer`.
+
+    Call this at every harvester entry point BEFORE any OAuth operation
+    that would otherwise hang or spam launchd retries when Beeper isn't
+    running. Silent — logs nothing, just returns bool.
+    """
+    try:
+        urllib.request.urlopen(
+            f"{issuer.rstrip('/')}/v1/info", timeout=timeout_seconds,
+        )
+        return True
+    except (OSError, urllib.error.URLError):
+        return False
 
 
 # ── persistence ───────────────────────────────────────────────────────────
 
 def save_token(token: BeeperToken, path: Path = DEFAULT_TOKEN_PATH) -> None:
+    """Persist a token atomically with 0600 permissions.
+
+    Atomic write prevents torn reads when two harvester cadences fire
+    near-simultaneously after a Mac wake. `chmod` failures are raised
+    rather than swallowed — a world-readable token file is a security
+    event, not an ignorable warning.
+    """
+    import os as _os
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(asdict(token), indent=2))
-    # Permissions: owner read-write only. Defensive against umask exotica.
-    try:
-        path.chmod(0o600)
-    except OSError:
-        pass
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(asdict(token), indent=2))
+    # chmod BEFORE the atomic replace so the final file never exists with
+    # wider permissions even for a moment.
+    _os.chmod(tmp, 0o600)
+    _os.replace(tmp, path)
 
 
 def load_token(path: Path = DEFAULT_TOKEN_PATH) -> Optional[BeeperToken]:
@@ -450,46 +519,34 @@ def get_or_create_token(
             except Exception as e:
                 logger.info(f"Refresh failed, re-authorizing: {e}")
 
-    # Full flow: register client, PKCE authorize, exchange code.
-    # We register a fresh client each time we hit this path so the user's
-    # Approved Connections list reflects current use. The old registration
-    # is garbage-collected by Beeper eventually.
-    port_hint = _pick_ephemeral_port()
-    redirect_uri = f"http://127.0.0.1:{port_hint}/callback"
+    # Full flow: bind loopback server FIRST to know our actual port, then
+    # register the client with that exact redirect_uri, then authorize and
+    # exchange. Binding first eliminates the port-mismatch race where DCR
+    # registered a port that the OS then reassigned.
+    server = _CallbackServer(("127.0.0.1", 0), _CallbackHandler)
+    actual_port = server.server_address[1]
+    redirect_uri = f"http://127.0.0.1:{actual_port}/callback"
+
     registration = register_client(
         issuer=issuer,
         client_name=client_name,
         redirect_uris=[redirect_uri],
         scopes=scopes,
     )
-    code, verifier, actual_redirect_uri = _run_authorization_flow(
-        issuer=issuer, client_id=registration.client_id,
-        scopes=scopes, open_browser=open_browser,
+
+    code, verifier = _run_authorization_flow_on_server(
+        server=server,
+        issuer=issuer,
+        client_id=registration.client_id,
+        redirect_uri=redirect_uri,
+        scopes=scopes,
+        open_browser=open_browser,
     )
-    # The authorization flow picks its own ephemeral port separately from the
-    # hint we used for registration — Beeper's DCR accepts the ephemeral
-    # pattern and will match on the exact redirect URI at the token endpoint.
-    # If Beeper rejects, re-register with the actual URI.
-    try:
-        token = exchange_code(
-            issuer=issuer, client_id=registration.client_id,
-            code=code, code_verifier=verifier,
-            redirect_uri=actual_redirect_uri,
-        )
-    except RuntimeError as e:
-        if "redirect_uri" in str(e).lower():
-            logger.info("Re-registering client with actual redirect URI")
-            registration = register_client(
-                issuer=issuer, client_name=client_name,
-                redirect_uris=[actual_redirect_uri], scopes=scopes,
-            )
-            token = exchange_code(
-                issuer=issuer, client_id=registration.client_id,
-                code=code, code_verifier=verifier,
-                redirect_uri=actual_redirect_uri,
-            )
-        else:
-            raise
+
+    token = exchange_code(
+        issuer=issuer, client_id=registration.client_id,
+        code=code, code_verifier=verifier, redirect_uri=redirect_uri,
+    )
 
     save_token(token, token_path)
     return token
@@ -556,9 +613,10 @@ def _run_self_test() -> None:
         p = Path(tf.name)
     try:
         save_token(tok, p)
-        # Verify permissions tightened
+        # Strict — token file MUST be 0600 to survive review. World-readable
+        # or group-readable is a security event, not an acceptable variant.
         mode = p.stat().st_mode & 0o777
-        assert mode in (0o600, 0o644), f"token file mode {oct(mode)}"
+        assert mode == 0o600, f"token file mode {oct(mode)} (expected 0o600)"
         loaded = load_token(p)
         assert loaded is not None
         assert loaded.access_token == tok.access_token
@@ -619,6 +677,10 @@ def _run_self_test() -> None:
 
 def _run_interactive() -> None:
     """Live flow against running Beeper. Requires user to approve in browser."""
+    if not is_beeper_reachable():
+        print("ERROR: Beeper Desktop API not reachable on localhost:23373")
+        print("  Start Beeper Desktop and enable the Desktop API in Settings → Developers.")
+        sys.exit(1)
     print("Running live Beeper OAuth flow…")
     token = get_or_create_token(force_new=True)
     print(f"  ✓ access_token acquired ({len(token.access_token)}c), "

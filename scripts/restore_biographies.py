@@ -77,6 +77,35 @@ def _extract_omnichannel_block(bio: str) -> str:
     return "\n".join(out).strip()
 
 
+class _AuthAbort(RuntimeError):
+    """Raised when People API returns 401 — the whole run should abort so
+    the operator refreshes credentials rather than silently failing every
+    contact with the same auth error."""
+
+
+def _classify_api_error(exc: Exception) -> str:
+    """Bucket an API exception into one of: auth / permanent / transient.
+
+    auth      → 401/403 with auth message → abort whole run
+    permanent → 404, 410, most 400s → log + skip this contact
+    transient → 429, 5xx, network → log + count retry candidate
+    """
+    text = str(exc).lower()
+    if "401" in text or "unauthenticated" in text or "invalid credentials" in text:
+        return "auth"
+    if "403" in text or "permission" in text or "forbidden" in text:
+        return "auth"
+    if "404" in text or "410" in text or "not found" in text or "deleted" in text:
+        return "permanent"
+    if "429" in text or "rate" in text or "quota" in text:
+        return "transient"
+    if "500" in text or "502" in text or "503" in text or "504" in text:
+        return "transient"
+    if "timed out" in text or "timeout" in text or "connection" in text:
+        return "transient"
+    return "permanent"
+
+
 def restore_one(
     client: PeopleAPIClient,
     rn: str,
@@ -85,13 +114,20 @@ def restore_one(
     omnichannel_only: bool,
     dry_run: bool,
 ) -> str:
-    """Restore a single contact's biography. Returns a status string."""
+    """Restore a single contact's biography. Returns a status string.
+
+    Raises `_AuthAbort` on 401/403 so the caller can bail out for the
+    whole run — silently proceeding through auth failures would produce
+    thousands of misleading "skipped" rows.
+    """
     try:
         person = client.get_contact(rn, person_fields="biographies,metadata")
     except Exception as e:
-        # Contact may have been hard-deleted since backup. Log and skip —
-        # NEVER create a new contact from a backup. That's by policy.
-        return f"skipped (fetch-failed: {e})"
+        kind = _classify_api_error(e)
+        if kind == "auth":
+            raise _AuthAbort(f"auth failure on {rn}: {e}") from e
+        # permanent/transient → skip with classified tag
+        return f"skipped-{kind}:{type(e).__name__}"
 
     etag = person.get("etag")
     bios = person.get("biographies", [])
@@ -155,7 +191,15 @@ def main() -> int:
     creds = authenticate()
     client = PeopleAPIClient(creds)
 
-    stats = {"restored": 0, "no-change": 0, "would-change": 0, "skipped": 0, "errors": 0}
+    # Classified counters — conflating auth + transient + permanent into
+    # a single "errors" bucket hid entire-run auth failures under a friendly
+    # summary. Each class has distinct remediation.
+    stats = {
+        "restored": 0, "no-change": 0, "would-change": 0,
+        "skipped-permanent": 0, "skipped-transient": 0,
+        "update-errors": 0,
+    }
+    auth_aborted = False
 
     for i, (rn, backup_bio) in enumerate(backups.items(), 1):
         try:
@@ -170,16 +214,39 @@ def main() -> int:
                 stats["no-change"] += 1
             elif status.startswith("would-change"):
                 stats["would-change"] += 1
-            elif status.startswith("skipped"):
-                stats["skipped"] += 1
+            elif status.startswith("skipped-permanent"):
+                stats["skipped-permanent"] += 1
+                logger.info(f"{rn}: {status}")
+            elif status.startswith("skipped-transient"):
+                stats["skipped-transient"] += 1
+                logger.warning(f"{rn}: {status}")
             if i % 50 == 0:
                 print(f"  progress: {i}/{len(backups)}  stats={stats}")
+        except _AuthAbort as e:
+            print(f"\nAUTH FAILURE — aborting whole run: {e}", file=sys.stderr)
+            print(f"  Refresh OAuth credentials (delete token_beeper.json / re-run auth) "
+                  f"and retry.", file=sys.stderr)
+            auth_aborted = True
+            break
         except Exception as e:
-            logger.warning(f"{rn}: {e}")
-            stats["errors"] += 1
+            # update_contact threw after get_contact succeeded — classify too
+            kind = _classify_api_error(e)
+            if kind == "auth":
+                print(f"\nAUTH FAILURE on update ({rn}) — aborting: {e}", file=sys.stderr)
+                auth_aborted = True
+                break
+            stats["update-errors"] += 1
+            logger.warning(f"{rn}: update failed ({kind}): {e}")
 
     print()
     print(f"Done. Stats: {stats}")
+    if auth_aborted:
+        print("Run aborted on auth failure — stats above reflect partial progress only.")
+        return 2
+    if stats["skipped-transient"] > 0:
+        print(
+            f"⚠ {stats['skipped-transient']} transient failures — re-run to retry."
+        )
     if args.dry_run and stats["would-change"] > 0:
         print(f"To apply, re-run without --dry-run (or add --yes to skip the prompt).")
     return 0

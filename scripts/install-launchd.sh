@@ -36,6 +36,14 @@ fi
 mkdir -p "${LAUNCH_DIR}"
 mkdir -p "${LOG_DIR}"
 
+# Escape `&` in replacement strings so sed treats them as literal characters.
+# Without this, a REPO_ROOT containing `&` (e.g. ~/Projects/R&D/…) would
+# interpolate "the matched text" from the left-hand side into the replacement,
+# silently corrupting the generated plist — and launchctl would load it.
+SAFE_ROOT="${REPO_ROOT//&/\\&}"
+SAFE_LOG="${LOG_DIR//&/\\&}"
+SAFE_UV="${UV_BIN//&/\\&}"
+
 for agent in "${AGENTS[@]}"; do
   src="${REPO_ROOT}/launchagents/${agent}.plist"
   dst="${LAUNCH_DIR}/${agent}.plist"
@@ -48,10 +56,11 @@ for agent in "${AGENTS[@]}"; do
   # Unload if already loaded (idempotent reinstall)
   launchctl unload "${dst}" 2>/dev/null || true
 
-  # Rewrite hardcoded paths in the template to match invoking user
-  sed -e "s|/Users/peterfusek1980gmail.com/Projects/contactrefiner|${REPO_ROOT}|g" \
-      -e "s|/Users/peterfusek1980gmail.com/Library/Logs/contactrefiner|${LOG_DIR}|g" \
-      -e "s|/opt/homebrew/bin/uv|${UV_BIN}|g" \
+  # Rewrite hardcoded paths in the template to match invoking user.
+  # Pipe delimiter avoids needing to escape slashes in paths.
+  sed -e "s|/Users/peterfusek1980gmail.com/Projects/contactrefiner|${SAFE_ROOT}|g" \
+      -e "s|/Users/peterfusek1980gmail.com/Library/Logs/contactrefiner|${SAFE_LOG}|g" \
+      -e "s|/opt/homebrew/bin/uv|${SAFE_UV}|g" \
       "${src}" > "${dst}"
 
   launchctl load "${dst}"

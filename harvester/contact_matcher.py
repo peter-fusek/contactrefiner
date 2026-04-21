@@ -50,13 +50,23 @@ FUZZY_NAME_THRESHOLD = 92
 
 # ── normalization helpers ─────────────────────────────────────────────────
 
+# Module-level counter of phone-parse failures. Populated by normalize_phone;
+# callers can inspect + log via log_phone_parse_summary() at harvest end.
+# Parse failures are expected for some inputs (short codes, internal IDs) but
+# a systematic spike indicates upstream schema drift (e.g. Beeper starts
+# returning a new handle format). Surface via counter rather than silent drop.
+_phone_parse_failures: dict[str, int] = {"total": 0, "empty_results": 0}
+
+
 def normalize_phone(raw: str, default_region: str = DEFAULT_PHONE_REGION) -> Optional[str]:
     """Normalize a phone string to E.164 (e.g. `+421903123456`).
 
     Returns None if `phonenumbers` can't parse it or the result is invalid.
     Tries the default region first, falls back to prefix-aware parsing.
+    Failures are counted in `_phone_parse_failures` for observability.
     """
     if not raw:
+        _phone_parse_failures["empty_results"] += 1
         return None
     try:
         parsed = phonenumbers.parse(raw, default_region)
@@ -66,7 +76,6 @@ def normalize_phone(raw: str, default_region: str = DEFAULT_PHONE_REGION) -> Opt
             )
     except phonenumbers.NumberParseException:
         pass
-    # Fallback when the raw string already has `+` or an international prefix.
     try:
         parsed = phonenumbers.parse(raw, None)
         if phonenumbers.is_valid_number(parsed):
@@ -75,7 +84,24 @@ def normalize_phone(raw: str, default_region: str = DEFAULT_PHONE_REGION) -> Opt
             )
     except phonenumbers.NumberParseException:
         pass
+    _phone_parse_failures["total"] += 1
     return None
+
+
+def log_phone_parse_summary() -> None:
+    """Emit a summary line about phone-parse failures seen this run.
+
+    Callers (harvester pipeline) invoke this at run end so a systematic
+    spike is visible in the log even though individual failures are debug.
+    """
+    total = _phone_parse_failures["total"]
+    empty = _phone_parse_failures["empty_results"]
+    if total == 0 and empty == 0:
+        return
+    logger.info(
+        f"phone parse: {total} inputs failed to normalize to E.164, "
+        f"{empty} empty handles skipped"
+    )
 
 
 def normalize_email(raw: str) -> Optional[str]:

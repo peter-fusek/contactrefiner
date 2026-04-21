@@ -47,6 +47,28 @@ from harvester.crm_omnichannel import OMNICHANNEL_MARKER, strip_block
 logger = logging.getLogger("strip_omnichannel_blocks")
 
 
+class _AuthAbort(RuntimeError):
+    """Abort the whole run on 401/403 rather than silently per-contact-failing."""
+
+
+def _classify_api_error(exc: Exception) -> str:
+    """Bucket API errors: auth / permanent / transient (see restore_biographies.py)."""
+    text = str(exc).lower()
+    if "401" in text or "unauthenticated" in text:
+        return "auth"
+    if "403" in text or "permission" in text or "forbidden" in text:
+        return "auth"
+    if "404" in text or "410" in text or "not found" in text or "deleted" in text:
+        return "permanent"
+    if "429" in text or "rate" in text or "quota" in text:
+        return "transient"
+    if "500" in text or "502" in text or "503" in text or "504" in text:
+        return "transient"
+    if "timed out" in text or "timeout" in text or "connection" in text:
+        return "transient"
+    return "permanent"
+
+
 def strip_one(
     client: PeopleAPIClient, rn: str, *, dry_run: bool,
 ) -> str:
@@ -54,7 +76,10 @@ def strip_one(
     try:
         person = client.get_contact(rn, person_fields="biographies,metadata")
     except Exception as e:
-        return f"fetch-error:{e}"
+        kind = _classify_api_error(e)
+        if kind == "auth":
+            raise _AuthAbort(f"auth failure on {rn}: {e}") from e
+        return f"fetch-error-{kind}"
 
     bios = person.get("biographies", [])
     current = bios[0].get("value", "") if bios else ""
@@ -109,9 +134,12 @@ def main() -> int:
     all_contacts = client.get_all_contacts(person_fields="names,metadata")
     print(f"  {len(all_contacts)} contacts")
 
-    stats = {"stripped": 0, "no-block": 0, "no-change": 0,
-             "would-strip": 0, "errors": 0}
+    stats = {
+        "stripped": 0, "no-block": 0, "no-change": 0, "would-strip": 0,
+        "fetch-permanent": 0, "fetch-transient": 0, "update-errors": 0,
+    }
     processed = 0
+    auth_aborted = False
 
     for contact in all_contacts:
         if args.limit and processed >= args.limit:
@@ -130,12 +158,24 @@ def main() -> int:
                 stats["no-change"] += 1
             elif status.startswith("would-strip"):
                 stats["would-strip"] += 1
-            elif status.startswith("fetch-error"):
-                stats["errors"] += 1
+            elif status == "fetch-error-permanent":
+                stats["fetch-permanent"] += 1
+                logger.info(f"{rn}: {status}")
+            elif status == "fetch-error-transient":
+                stats["fetch-transient"] += 1
                 logger.warning(f"{rn}: {status}")
+        except _AuthAbort as e:
+            print(f"\nAUTH FAILURE — aborting: {e}", file=sys.stderr)
+            auth_aborted = True
+            break
         except Exception as e:
-            logger.warning(f"{rn}: {e}")
-            stats["errors"] += 1
+            kind = _classify_api_error(e)
+            if kind == "auth":
+                print(f"\nAUTH FAILURE on update ({rn}) — aborting: {e}", file=sys.stderr)
+                auth_aborted = True
+                break
+            stats["update-errors"] += 1
+            logger.warning(f"{rn}: {kind}: {e}")
 
         processed += 1
         if processed % 100 == 0:
@@ -143,6 +183,11 @@ def main() -> int:
 
     print()
     print(f"Done. Stats: {stats}")
+    if auth_aborted:
+        print("Run aborted on auth failure — stats above reflect partial progress only.")
+        return 2
+    if stats["fetch-transient"] > 0:
+        print(f"⚠ {stats['fetch-transient']} transient fetch failures — re-run to retry.")
     if args.dry_run and stats["would-strip"] > 0:
         print(f"To apply, re-run without --dry-run.")
     return 0

@@ -197,40 +197,67 @@ def _compose_active_body(kpi: ContactKPI, w30, as_of: datetime) -> str:
 def strip_block(biography: str) -> str:
     """Remove any existing Omnichannel block from a biography string.
 
-    Block identified by `OMNICHANNEL_MARKER` header; terminated by explicit
-    `OMNICHANNEL_END`, or defensively by the next `──` header, or a blank
-    line. Preserves all surrounding content (other marker blocks, user
-    free-text) verbatim.
+    Safety contract (hardened per review): only strip when a proper
+    terminator is present within a reasonable window. Valid terminators:
+      - `OMNICHANNEL_END` line (the canonical case)
+      - next `──` marker header (another block starts)
+      - blank line
+
+    If NONE of the above appears after the Omnichannel header within 20
+    lines, refuse to strip and return the original biography unchanged.
+    This prevents the state machine from eating `── CRM Notes`, `── Last
+    Interaction`, or user free-text when fed a malformed/orphan block.
+
+    Logs a warning when refusing to strip so the caller can decide (e.g.
+    skip API call + flag for manual review).
     """
     if OMNICHANNEL_MARKER not in biography:
         return biography
 
     lines = biography.split("\n")
-    out: list[str] = []
-    in_block = False
-    for line in lines:
-        if OMNICHANNEL_MARKER in line and not in_block:
-            in_block = True
-            continue
-        if in_block:
-            if OMNICHANNEL_END in line:
-                in_block = False
-                continue
-            # Defensive: if we hit the next marker block without seeing End
-            if line.strip().startswith("──"):
-                in_block = False
-                out.append(line)
-                continue
-            # Defensive: blank line also ends the block
-            if not line.strip():
-                in_block = False
-                continue
-            # Skip content lines inside the block
-            continue
-        out.append(line)
 
-    # Normalize trailing whitespace but preserve leading content
-    return "\n".join(out).rstrip() + ("\n" if biography.endswith("\n") else "")
+    # First pass: locate the block range. Only commit to stripping if we
+    # can pair the header with a terminator within the safety window.
+    block_start: Optional[int] = None
+    block_end: Optional[int] = None  # exclusive
+    SAFETY_WINDOW = 20
+
+    for i, line in enumerate(lines):
+        if block_start is None:
+            if OMNICHANNEL_MARKER in line:
+                block_start = i
+            continue
+        # Looking for a terminator
+        if i - block_start > SAFETY_WINDOW:
+            logger.warning(
+                "strip_block: malformed Omnichannel block (no terminator "
+                f"within {SAFETY_WINDOW} lines); leaving biography untouched"
+            )
+            return biography
+        if OMNICHANNEL_END in line:
+            block_end = i + 1  # include the End marker in the removed range
+            break
+        if line.strip().startswith("──"):
+            # Next marker starts — strip everything before it
+            block_end = i
+            break
+        if not line.strip():
+            block_end = i
+            break
+
+    if block_start is None or block_end is None:
+        logger.warning(
+            "strip_block: could not pair Omnichannel header with terminator; "
+            "leaving biography untouched"
+        )
+        return biography
+
+    # Second pass: reconstruct biography without the block range.
+    out = lines[:block_start] + lines[block_end:]
+
+    # Trim paired blank lines created by the removal (avoid double newlines)
+    result = "\n".join(out).rstrip()
+    return result + ("\n" if biography.endswith("\n") else "")
 
 
 def merge_into_biography(biography: str, block: str) -> str:
@@ -436,6 +463,25 @@ Free-text notes about this person."""
     block_changed = build_block(kpi_changed, as_of=as_of)
     assert should_update(merged, block_changed), "should_update True for changed KPI"
     print("Case H (change detection): should_update=True when KPI changed")
+
+    # Case H2: malformed Omnichannel block (no terminator, no blank line)
+    # — strip_block must refuse rather than eat adjacent content.
+    malformed = (
+        "── Omnichannel (auto · 2026-04-01) ──\n"
+        + "content with no terminator\n" * 25  # way past safety window
+        + "── CRM Notes (updated 2026-04-19) ──\n"
+        + "Important user note\n"
+    )
+    # SAFETY_WINDOW=20 inside strip_block; the CRM Notes marker is at line 26
+    # but strip_block bails out after 20 lines of no-terminator search.
+    stripped_malformed = strip_block(malformed)
+    # Two acceptable outcomes: either stripped via the CRM Notes marker
+    # found within window (if malformed block is shorter) OR untouched.
+    # Either way, "Important user note" MUST still be present.
+    assert "Important user note" in stripped_malformed, (
+        "strip_block ate user content!"
+    )
+    print("Case H2 (malformed block): user content preserved")
 
     # Case I: backup / restore round-trip
     import tempfile
