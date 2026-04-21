@@ -54,6 +54,7 @@ const SIGNAL_META: Record<LeadSignalType, { label: string; color: string; icon: 
   it_modernisation: { label: 'AI/MODERN', color: 'bg-purple-500/15 text-purple-300 border-purple-500/30', icon: 'i-lucide-cpu' },
   vibecoding_agentic: { label: 'AGENTIC', color: 'bg-pink-500/15 text-pink-300 border-pink-500/30', icon: 'i-lucide-sparkles' },
   recent_job_change: { label: 'JOB CHANGE', color: 'bg-green-500/15 text-green-300 border-green-500/30', icon: 'i-lucide-arrow-right-left' },
+  dm_awaiting_reply: { label: 'REPLY DUE', color: 'bg-red-500/15 text-red-300 border-red-500/30', icon: 'i-lucide-reply' },
 }
 
 const filterOptions: { value: LeadSignalType | 'all'; label: string }[] = [
@@ -65,6 +66,7 @@ const filterOptions: { value: LeadSignalType | 'all'; label: string }[] = [
   { value: 'it_modernisation', label: 'IT Modernisation' },
   { value: 'vibecoding_agentic', label: 'Agentic / Vibecoding' },
   { value: 'recent_job_change', label: 'Recent Job Change' },
+  { value: 'dm_awaiting_reply', label: 'Awaiting My Reply (DM)' },
 ]
 
 const DISMISSAL_OPTIONS: { value: LeadDismissalReason; label: string }[] = [

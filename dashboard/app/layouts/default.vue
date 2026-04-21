@@ -1,9 +1,45 @@
 <script setup lang="ts">
+import type { HarvestStatusResponse } from '~/server/utils/types'
+
 const route = useRoute()
 const { user, loggedIn, clear: logout } = useUserSession()
 
 const isDemo = computed(() => !loggedIn.value)
 const sidebarOpen = ref(false)
+
+// Surface harvest freshness on every page — the Option-D session-start
+// pattern is otherwise invisible, and a multi-day gap looks identical to
+// "just ran" from the sidebar.
+const { data: harvest } = useFetch<HarvestStatusResponse>('/api/harvest-status', {
+  default: () => null,
+  // Revalidate when navigating between pages so the chip doesn't go stale.
+  key: 'harvest-status',
+})
+
+const harvestChip = computed(() => {
+  const h = harvest.value
+  if (!h) return null
+  const hrs = h.hoursSinceLastRun
+  const fmt = (hrs: number | null) => {
+    if (hrs === null) return '—'
+    if (hrs < 1) return '<1h'
+    if (hrs < 48) return `${Math.round(hrs)}h`
+    return `${Math.round(hrs / 24)}d`
+  }
+  const styleByStaleness: Record<HarvestStatusResponse['staleness'], { color: string; icon: string }> = {
+    fresh: { color: 'text-green-400 bg-green-500/10 border-green-500/20', icon: 'i-lucide-check-circle-2' },
+    hours: { color: 'text-amber-400 bg-amber-500/10 border-amber-500/20', icon: 'i-lucide-clock' },
+    days: { color: 'text-orange-400 bg-orange-500/10 border-orange-500/20', icon: 'i-lucide-clock' },
+    stale: { color: 'text-red-400 bg-red-500/10 border-red-500/20', icon: 'i-lucide-alert-triangle' },
+    missing: { color: 'text-neutral-500 bg-neutral-800 border-neutral-700', icon: 'i-lucide-minus-circle' },
+  }
+  const s = styleByStaleness[h.staleness]
+  const label = h.staleness === 'missing' ? 'no harvest' : fmt(hrs)
+  const title = h.lastRun
+    ? `Last harvest ${new Date(h.lastRun.timestamp).toLocaleString()} · ${h.lastRun.recordsNew} new records · ${h.last7dRuns} runs in 7d`
+    : 'No harvest runs on file'
+  return { label, title, ...s }
+})
 
 const navItems = [
   { label: 'Status', icon: 'i-lucide-activity', to: '/dashboard' },
@@ -55,15 +91,26 @@ watch(() => route.path, () => {
       :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'"
     >
       <!-- Header -->
-      <div class="flex items-center gap-2 p-4 border-b border-neutral-800/50">
-        <img src="/favicon.svg" alt="Contact Refiner" class="size-8" />
-        <div class="min-w-0">
-          <p class="text-sm font-semibold text-primary-400 truncate">
-            Mission Control
-          </p>
-          <p class="text-[10px] text-neutral-500 truncate">
-            Contacts Refiner
-          </p>
+      <div class="p-4 border-b border-neutral-800/50 space-y-2">
+        <div class="flex items-center gap-2">
+          <img src="/favicon.svg" alt="Contact Refiner" class="size-8" />
+          <div class="min-w-0">
+            <p class="text-sm font-semibold text-primary-400 truncate">
+              Mission Control
+            </p>
+            <p class="text-[10px] text-neutral-500 truncate">
+              Contacts Refiner
+            </p>
+          </div>
+        </div>
+        <div
+          v-if="harvestChip"
+          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded border text-[10px] font-medium"
+          :class="harvestChip.color"
+          :title="harvestChip.title"
+        >
+          <UIcon :name="harvestChip.icon" class="size-3" />
+          Harvest · {{ harvestChip.label }}
         </div>
       </div>
 

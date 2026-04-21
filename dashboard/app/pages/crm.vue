@@ -370,6 +370,24 @@ function signalColor(type: string | undefined): string {
               </p>
             </div>
 
+            <!-- Beeper 30d omnichannel row — aggregates only, per docs/schemas/interaction.md §Privacy -->
+            <div v-if="selectedContact.beeper" class="flex items-center gap-2 text-xs">
+              <UIcon name="i-lucide-message-circle" class="size-3.5 text-neutral-500 shrink-0" />
+              <span class="text-neutral-500">Beeper 30d:</span>
+              <span class="text-neutral-300 tabular-nums">
+                in {{ selectedContact.beeper.messages_30d_in }} / out {{ selectedContact.beeper.messages_30d_out }}
+              </span>
+              <span v-if="selectedContact.beeper.channels_30d" class="text-neutral-500">
+                · {{ selectedContact.beeper.channels_30d }} ch
+              </span>
+              <span v-if="selectedContact.beeper.awaiting_reply_side === 'mine'" class="text-red-400 font-medium">
+                · you owe reply
+              </span>
+              <span v-else-if="selectedContact.beeper.awaiting_reply_side === 'theirs'" class="text-neutral-500">
+                · ball in their court
+              </span>
+            </div>
+
             <!-- Emails -->
             <div v-if="selectedContact.contact.emails?.length">
               <p class="text-xs text-neutral-500 mb-1">Email</p>

@@ -16,6 +16,27 @@ function signalColor(type: string | undefined): string {
   return 'text-neutral-500 bg-neutral-800'
 }
 
+// Map the harvester's channel tags (docs/schemas/interaction.md) to short
+// UI abbreviations so the awaiting-reply pill stays card-width-safe.
+const CHANNEL_ABBREV: Record<string, string> = {
+  whatsapp: 'WA',
+  linkedin_dm: 'LI',
+  telegram: 'TG',
+  signal: 'SIG',
+  slack: 'Slack',
+  imessage: 'iMsg',
+  sms: 'SMS',
+  messenger: 'FB',
+  instagram: 'IG',
+  discord: 'Disc',
+  twitter: 'X',
+}
+
+function channelAbbrev(ch: string | null): string {
+  if (!ch) return 'DM'
+  return CHANNEL_ABBREV[ch] || ch.slice(0, 4).toUpperCase()
+}
+
 function dragStart(e: DragEvent) {
   if (!e.dataTransfer) return
   e.dataTransfer.setData('text/plain', props.contact.resourceName)
@@ -49,6 +70,14 @@ function dragStart(e: DragEvent) {
           {{ contact.score_total }}
         </span>
       </div>
+    </div>
+
+    <!-- Awaiting-reply pill: red when I owe them a reply via Beeper DM -->
+    <div v-if="contact.beeper?.awaiting_reply_side === 'mine'" class="mb-1.5">
+      <span class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-red-400 bg-red-500/15">
+        <UIcon name="i-lucide-reply" class="size-3" />
+        You owe reply · {{ channelAbbrev(contact.beeper.channel_primary) }}
+      </span>
     </div>
 
     <!-- LinkedIn signal badge + signal text -->

@@ -64,6 +64,11 @@ export function deriveSignalTypes(score: FollowUpScore): LeadSignalType[] {
   if (containsAny(roleText + ' ' + headline, IT_MODERNISATION_KEYWORDS)) types.push('it_modernisation')
   if (containsAny(headline, VIBECODING_KEYWORDS)) types.push('vibecoding_agentic')
 
+  // Beeper-derived signal: a warm lead where Peter hasn't replied yet has
+  // higher outreach urgency than a cold profile match — surface it so the
+  // /signals "Action" column can flag it independently of LinkedIn state.
+  if (score.beeper?.awaiting_reply_side === 'mine') types.push('dm_awaiting_reply')
+
   return Array.from(new Set(types))
 }
 
