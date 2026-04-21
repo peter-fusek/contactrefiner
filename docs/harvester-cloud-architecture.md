@@ -1,7 +1,7 @@
 # Harvester — cloud architecture options
 
-**Status:** open decision, 2026-04-21
-**Context:** Sprint 3.33 S2 shipped a local launchd pattern for the omnichannel harvester. Peter wants cloud-first execution with supervised-session runs as a fallback — the launchd pattern has been uninstalled. This doc lays out the viable hosts for the harvester + Beeper runtime so we can pick one before ~2026-04-25.
+**Status:** ✅ **DECIDED 2026-04-21: Option D (supervised session-only)**. See [Decision](#decision) at the bottom. Options A/B/C kept in this doc as reference in case constraints change later.
+**Context:** Sprint 3.33 S2 shipped a local launchd pattern for the omnichannel harvester. Peter wants cloud-first execution with supervised-session runs as a fallback — the launchd pattern has been uninstalled. This doc lays out the viable hosts for the harvester + Beeper runtime.
 
 ## The hard constraint
 
@@ -98,25 +98,27 @@ The options below differ only in where that "somewhere" lives.
 - **Control surface:** Peter sees every tool call in real-time in the Claude Code UI.
 - **Downside:** no scheduled runs. KPI freshness depends on how often Peter runs it. Fine for weekly FollowUp cadence; bad for "what's waiting for my reply right now" style alerts.
 
-## Recommendation
+## Decision
 
-Layer them:
+**Picked: Option D — supervised session-only**, wired into the session-start convention.
 
-1. **Today (Session 3 prep):** Option D continues. Every time we want to exercise the biography-writeback dry-run or score-refresh a FollowUp run, Peter's session calls the MCP harvester inline. Zero new infra, full supervision. Already works end-to-end on Peter's Mac as demonstrated this session.
+Peter's answers on 2026-04-21:
+1. Mac is occupied by his own work during the day; he'd rather tie harvest cadence to when he *starts a session in this project* than to a calendar. → Option A's Cloud Scheduler cadence is wrong shape; the right cadence is "first step of /getready".
+2. No need for real-time alerts; dashboard-poll-from-time-to-time is enough. → Option C (Matrix rewrite) is over-specced for current need.
+3. Minimum new infra, minimum new cost. → Option B ruled out.
 
-2. **Within 1 week:** Option A layered on top. Tailscale the Mac's Beeper to a Cloud Run Job that runs hourly. Gives "while Peter's Mac is on during business hours" coverage. The `data/interactions/*.jsonl` fed into Cloud Run monthly jobs for FollowUp scoring. Trivial add — we already have the `harvest-messages` CLI, just point its `BEEPER_API_BASE` at the tailnet.
+Mechanism:
+- `scripts/mcp_harvest_session.py` is the runner (this PR).
+- Project CLAUDE.md now says "Step 0 of every session: run the MCP harvest before /getready".
+- GCS upload uses Peter's ADC (`gcloud auth application-default login`), no service-account key needed.
+- Idempotent — dedup by `interactionId` means re-running mid-session is free.
 
-3. **Maybe Q3:** Option C rewrite. Only if Option A's "Mac must be on" window isn't enough — e.g. if we want always-on alerting or if Peter changes Macs often. Worth doing then because it unifies both the harvester and any future Matrix-native features (reactions, edits, read receipts in real-time).
-
-**Not recommended:** Option B. The cost/complexity doesn't pay back vs Option A unless Peter's Mac is offline >50% of waking hours, which it isn't.
-
-## Open questions for Peter
-
-1. Is the Mac typically on during work hours (09:00-18:00 Europe/Bratislava)? If yes → Option A covers 95% of useful harvest windows.
-2. Do you want real-time alerts ("someone just messaged you", "this VIP awaits reply") or are monthly FollowUp rolls fine? Real-time = Option C is the only fit.
-3. Any preference on Tailscale vs. Cloudflare Tunnel vs. GCP IAP Desktop Connect for the Mac → Cloud Run bridge? All work; Tailscale is simplest.
+Revisit triggers:
+- If harvest cadence consistently lags behind what the dashboard needs → Option A (Tailscale + Cloud Run, 1h setup, $0).
+- If Peter wants "what's waiting for my reply *right now*" alerts → Option C (Matrix rewrite, 2-3 days).
+- Don't revisit Option B (GCE VM + Beeper Linux) unless the Mac becomes a multi-week outage case — cost/complexity never wins over A.
 
 ## Non-goals for this decision
 
 - Running the Cloud Run *pipeline* (phases 0-5) — that's already cloud-native, separate system, already ships monthly. Not blocked on this decision.
-- Running a *second* Beeper account on the VM. This decision assumes exactly one Beeper account (Peter's), shared across Mac + any cloud copy. Beeper's Matrix-based multi-device story supports this but we should budget ~30 min for Peter to confirm his session list before any VM spin-up.
+- Running a *second* Beeper account on a VM. Peter's Beeper runs on Peter's Mac, period.

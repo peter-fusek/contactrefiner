@@ -4,9 +4,26 @@
 - Dashboard: `cd dashboard && GOOGLE_APPLICATION_CREDENTIALS=/tmp/dashboard-reader-key.json pnpm dev`
 - SA key may expire — restore with gcloud (see ops docs, not committed)
 - Python pipeline: `uv run python main.py analyze` / `uv run python main.py fix --auto`
-- Full Python CLI: `backup`, `analyze`, `fix`, `fix --auto`, `ai-review`, `followup`, `ltns`, `tag-activity`, `crm-sync`
+- Full Python CLI: `backup`, `analyze`, `fix`, `fix --auto`, `ai-review`, `followup`, `ltns`, `tag-activity`, `crm-sync`, `harvest-messages`, `backfill-beeper`, `score-interactions`
 - Dashboard build: `cd dashboard && pnpm build` / `pnpm preview` (test prod locally)
 - **Dev server cleanup**: Global PreToolUse hook auto-kills stale Nuxt processes before starting new `pnpm dev`
+
+## Session-start harvest (required before `/getready`)
+Reasoning: omnichannel data freshness is tied to **Peter's presence** — Beeper runs on his Mac, and it's only available when he's working. No launchd / Cloud Scheduler / background jobs. Instead:
+
+**Step 0 of every session in this project** — before `/getready`:
+1. Call `mcp__beeper__search_chats` with `lastActivityAfter` = 3-7 days ago, `limit` ≤ 100, `type: "any"`. Filter out internal groups (chats starting with `#`) and family/SVB-style groups.
+2. For each remaining chat (~10-30), call `mcp__beeper__list_messages` in parallel.
+3. Write the results as a JSON payload matching the shape in `scripts/mcp_harvest_session.py` docstring — save to `/tmp/mcp_harvest_YYYY-MM-DD.json`.
+4. Run: `uv run python scripts/mcp_harvest_session.py /tmp/mcp_harvest_YYYY-MM-DD.json`
+5. Run: `uv run python main.py score-interactions` — regenerates `data/interactions/contact_kpis.json` on GCS.
+6. **Then** proceed with `/getready`.
+
+Auth: `gcloud auth application-default login` must be live (ADC). If not, step 4's GCS upload silently degrades to local-only and step 5 still works.
+Skip entirely if `data/pipeline_paused.json` has `{"paused": true}` — the emergency-stop convention.
+Skip entirely if `mcp__beeper__get_accounts` fails — Beeper Desktop is off; note the skip and continue with `/getready`.
+
+The `scripts/mcp_harvest_session.py` runner is idempotent (dedup by `interactionId` against the existing month partition), so running it at session start costs nothing if there's no new traffic.
 
 ## Deploy
 - Render auto-deploys dashboard on push to main (~5min)
