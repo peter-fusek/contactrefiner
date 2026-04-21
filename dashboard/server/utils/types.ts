@@ -500,6 +500,23 @@ export interface LICRMResponse {
   }
 }
 
+// --- Harvest status ---
+
+export interface HarvestStatusResponse {
+  lastRun: {
+    timestamp: string
+    mode: string
+    chats: number
+    recordsNew: number
+    uploadStatus: string
+    errors: string[]
+  } | null
+  staleness: 'fresh' | 'hours' | 'days' | 'stale' | 'missing'
+  hoursSinceLastRun: number | null
+  last7dRuns: number
+  recentErrors: number
+}
+
 // --- Lead Signals ---
 
 export type LeadSignalType =
@@ -510,6 +527,7 @@ export type LeadSignalType =
   | 'it_modernisation'
   | 'vibecoding_agentic'
   | 'recent_job_change'
+  | 'dm_awaiting_reply'
 
 export type LeadSignalStage = 'candidate' | 'accepted' | 'dismissed'
 
