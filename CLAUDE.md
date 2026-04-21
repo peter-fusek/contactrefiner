@@ -4,9 +4,29 @@
 - Dashboard: `cd dashboard && GOOGLE_APPLICATION_CREDENTIALS=/tmp/dashboard-reader-key.json pnpm dev`
 - SA key may expire — restore with gcloud (see ops docs, not committed)
 - Python pipeline: `uv run python main.py analyze` / `uv run python main.py fix --auto`
-- Full Python CLI: `backup`, `analyze`, `fix`, `fix --auto`, `ai-review`, `followup`, `ltns`, `tag-activity`, `crm-sync`
+- Full Python CLI: `backup`, `analyze`, `fix`, `fix --auto`, `ai-review`, `followup`, `ltns`, `tag-activity`, `crm-sync`, `harvest-messages`, `backfill-beeper`, `score-interactions`
 - Dashboard build: `cd dashboard && pnpm build` / `pnpm preview` (test prod locally)
 - **Dev server cleanup**: Global PreToolUse hook auto-kills stale Nuxt processes before starting new `pnpm dev`
+
+## Session-start harvest (required before `/getready`)
+Reasoning: omnichannel data freshness is tied to **Peter's presence** — Beeper runs on his Mac, and it's only available when he's working. No launchd / Cloud Scheduler / background jobs. Instead:
+
+**Step 0 of every session in this project** — before `/getready`:
+1. Call `mcp__beeper__get_accounts`. If it fails or returns empty, **abort Step 0** (Beeper Desktop is off) — note the skip and jump to `/getready`. Otherwise record `beeperAccountsOk: true` in the payload below — the runner now enforces this flag and rejects payloads without it.
+2. Call `mcp__beeper__search_chats` with `lastActivityAfter` = 3-7 days ago, `limit` ≤ 100, `type: "any"`. Filter out: (a) internal groups (chats starting with `#`); (b) family / house-of-owners (SVB / BrewerPivko / Vlastnici style — these are low-signal for CRM). When in doubt, skip groups with 5+ participants.
+3. For each remaining chat (~10-30), call `mcp__beeper__list_messages` in parallel.
+4. Write the results as a JSON payload matching the shape in `scripts/mcp_harvest_session.py` docstring — save to `/tmp/mcp_harvest_YYYY-MM-DDTHHMMSS.json` (use a timestamp suffix, not just the date, so multiple runs per day don't overwrite). **Must include `beeperAccountsOk: true` at top level** — the runner hard-fails otherwise.
+5. Run: `uv run python scripts/mcp_harvest_session.py /tmp/mcp_harvest_YYYY-MM-DDTHHMMSS.json`. Exit code 2 = auth failure; re-run `gcloud auth application-default login` in an interactive terminal and retry.
+6. Run: `uv run python main.py score-interactions` — regenerates `data/interactions/contact_kpis.json` on GCS.
+7. **Then** proceed with `/getready`.
+
+Auth: `gcloud auth application-default login` must be live (ADC). If ADC has expired, the runner now escalates auth errors loudly (exit code 2 + stderr banner) rather than silently desyncing GCS.
+
+Emergency stop: `data/pipeline_paused.json` with `{"paused": true}` — the runner honours this and exits clean.
+
+ADC hygiene: if your Mac is ever lost or stolen, run `gcloud auth application-default revoke` from any device signed into peterfusek1980@gmail.com and rotate the `contacts-refiner-data` bucket's write bindings.
+
+The `scripts/mcp_harvest_session.py` runner is idempotent (dedup by `interactionId` against the existing month partition), so running it at session start costs nothing if there's no new traffic. A run log lands at `data/harvest_runs.json` (last 200 runs) and gets uploaded to GCS so the dashboard can show "last harvest" freshness.
 
 ## Deploy
 - Render auto-deploys dashboard on push to main (~5min)

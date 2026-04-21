@@ -87,8 +87,16 @@ if [[ "${MODE}" == "uninstall" ]]; then
       log "  ${agent} not installed — skipping"
     fi
   done
-  log "Uninstall complete. newsyslog entry left in place at ${NEWSYSLOG_FILE}"
-  log "  (remove manually if desired — requires sudo)"
+  # Clean up the staged newsyslog template. The system-owned config at
+  # /etc/newsyslog.d needs sudo, so we only hint at it; the staging file
+  # under $LOG_DIR is ours to remove.
+  NS_STAGING_LEGACY="${LOG_DIR}/newsyslog.d-contactrefiner-harvester.conf"
+  if [[ -f "${NS_STAGING_LEGACY}" ]]; then
+    rm -f "${NS_STAGING_LEGACY}"
+    log "✓ removed staged newsyslog template"
+  fi
+  log "Uninstall complete. newsyslog entry (if installed) left at ${NEWSYSLOG_FILE}"
+  log "  to fully remove the rotation rule: sudo rm ${NEWSYSLOG_FILE}"
   exit 0
 fi
 
@@ -149,8 +157,11 @@ done
 #
 # Requires sudo because /etc/newsyslog.d is root-owned. We write to a temp
 # file first and use `sudo install` so failure leaves no half-configured state.
-TMP_NS="$(mktemp -t contactrefiner-newsyslog.XXXXXX)"
-cat > "${TMP_NS}" <<EOF
+# Write the newsyslog template to a stable path under the repo so the user
+# can run the `sudo install` step at their convenience without hunting for a
+# deleted /tmp file.
+NS_STAGING="${LOG_DIR}/newsyslog.d-contactrefiner-harvester.conf"
+cat > "${NS_STAGING}" <<EOF
 # Rotate ContactRefiner harvester logs.
 # Installed by scripts/install-launchd.sh — edit there, not here.
 # Format: logfile_name  [owner:group]  mode  count  size  when  flags
@@ -159,14 +170,13 @@ ${LOG_DIR}/harvester-*.err   $(whoami):staff  644   4    5120    *     GZ
 EOF
 
 if sudo -n true 2>/dev/null; then
-  sudo install -m 0644 "${TMP_NS}" "${NEWSYSLOG_FILE}"
+  sudo install -m 0644 "${NS_STAGING}" "${NEWSYSLOG_FILE}"
   log "✓ wrote ${NEWSYSLOG_FILE}"
 else
-  log "ℹ  newsyslog.d config prepared at ${TMP_NS}"
-  log "   run: sudo install -m 0644 ${TMP_NS} ${NEWSYSLOG_FILE}"
+  log "ℹ  newsyslog.d config staged at ${NS_STAGING}"
+  log "   run: sudo install -m 0644 ${NS_STAGING} ${NEWSYSLOG_FILE}"
   log "   (sudo not available non-interactively; skipped)"
 fi
-rm -f "${TMP_NS}"
 
 log ""
 log "Installed ${#AGENTS[@]} launch agents."

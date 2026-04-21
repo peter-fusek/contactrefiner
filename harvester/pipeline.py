@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Iterator, Literal, Optional, Protocol
 
 from config import DATA_DIR
-from utils import upload_file_to_gcs
+from utils import GCSUploadAuthError, upload_file_to_gcs
 from harvester.contact_matcher import ContactMatcher, MatchCache, log_phone_parse_summary
 
 logger = logging.getLogger("contacts-refiner.harvester.pipeline")
@@ -158,6 +158,12 @@ def is_harvester_paused() -> bool:
 
 # ── partition writer ──────────────────────────────────────────────────────
 
+# Public seam for out-of-module consumers (e.g. scripts/mcp_harvest_session.py).
+# The leading-underscore names below remain the primary implementation so
+# internal call sites don't churn; the public aliases promise a stable
+# contract and show up as importable symbols. If a signature changes, update
+# the alias at the same time or both paths will silently drift.
+
 def _partition_path(ts: datetime, base: Optional[Path] = None) -> Path:
     if base is None:
         base = INTERACTIONS_DIR
@@ -220,6 +226,81 @@ def _append_unknown(record: dict, path: Optional[Path] = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _mark_pending_upload(partition: Path) -> None:
+    """Drop a sentinel file when a GCS upload failed, so the next run can
+    either retry it or surface to the dashboard that GCS is stale.
+
+    Kept simple: just an empty file per failed partition. Absence = nothing
+    pending. Caller shouldn't rely on this for recovery — it's a signal to
+    the operator that local and GCS state have diverged.
+    """
+    sentinel = INTERACTIONS_DIR / f".pending_upload_{partition.name}"
+    sentinel.parent.mkdir(parents=True, exist_ok=True)
+    sentinel.touch(exist_ok=True)
+
+
+# Public re-exports — see block comment at top of section.
+partition_path_for = _partition_path
+existing_partition_ids = _existing_ids
+append_records = _append_records
+append_unknown_record = _append_unknown
+
+
+def process_record(
+    record: dict,
+    *,
+    matcher: ContactMatcher,
+    records_by_partition: dict[Path, list[dict]],
+    existing_ids_cache: dict[Path, set[str]],
+    seen_in_run: set[str],
+    on_unknown: Callable[[dict], None] = _append_unknown,
+) -> Literal["new", "dupe_in_run", "dupe_on_disk", "skipped_no_ts", "skipped_no_id"]:
+    """Process one normalized InteractionRecord into a harvest run.
+
+    Shared by `_run_single_reader` (HTTP path) and scripts/mcp_harvest_session.py
+    (MCP path). Handles: intra-run dedup, disk dedup, timestamp window,
+    contact match, unknown-queue routing, partition bucket append.
+
+    Caller must: (a) count the returned state into its own stats; (b) pass
+    the same `records_by_partition`, `existing_ids_cache`, `seen_in_run`
+    across calls so dedup works; (c) invoke `append_records` at end to
+    flush pending writes.
+
+    This is the one place to change if the normalization→persistence
+    contract evolves — both paths must stay in sync by going through here.
+    """
+    iid = record.get("interactionId")
+    if not iid:
+        return "skipped_no_id"
+    if iid in seen_in_run:
+        return "dupe_in_run"
+    seen_in_run.add(iid)
+
+    ts_raw = record.get("timestamp")
+    if not ts_raw:
+        return "skipped_no_ts"
+    ts = _parse_ts(ts_raw)
+    if ts is None:
+        return "skipped_no_ts"
+
+    partition = _partition_path(ts)
+    if partition not in existing_ids_cache:
+        existing_ids_cache[partition] = _existing_ids(partition)
+    if iid in existing_ids_cache[partition]:
+        return "dupe_on_disk"
+
+    resolved = matcher.match(record)
+    if resolved:
+        record["contactId"] = resolved
+    else:
+        record["contactId"] = None
+        on_unknown(record)
+
+    records_by_partition.setdefault(partition, []).append(record)
+    existing_ids_cache[partition].add(iid)
+    return "new"
 
 
 # ── contact snapshot loader ───────────────────────────────────────────────
@@ -407,10 +488,29 @@ def run_harvest(
         if upload_to_gcs:
             blob = f"data/interactions/{partition.name}"
             try:
-                upload_file_to_gcs(partition, blob, "harvester")
-            except Exception as e:
-                logger.warning("Harvester: GCS upload failed for %s: %s", partition.name, e)
-                summary.errors.append(f"gcs_upload[{partition.name}]: {e}")
+                ok = upload_file_to_gcs(partition, blob, "harvester")
+                if ok is False:
+                    # Transient error — record but don't escalate. Next run
+                    # dedups against local, so as long as the NEXT upload
+                    # succeeds we catch up. Sentinel file prevents silent
+                    # indefinite desync if transient errors persist.
+                    _mark_pending_upload(partition)
+                    summary.errors.append(
+                        f"gcs_upload[{partition.name}]: transient (see data/interactions/.pending_upload)"
+                    )
+            except GCSUploadAuthError as e:
+                # Auth is operator-actionable. Log loud, mark the error
+                # distinctly so callers (main.py, launchd, dashboard) know
+                # re-auth is required — not just a retry.
+                logger.error(
+                    "Harvester: GCS upload AUTH FAILURE for %s — operator must "
+                    "run `gcloud auth application-default login`: %s",
+                    partition.name, e,
+                )
+                _mark_pending_upload(partition)
+                summary.errors.append(
+                    f"gcs_upload_auth[{partition.name}]: {e}"
+                )
 
     matcher.save_cache(MATCH_CACHE_FILE)
     cursors.save()
@@ -467,51 +567,32 @@ def _run_single_reader(
     """Harvest one reader, match+dedup each record, add to pending writes.
 
     Returns the number of new records (post-dedup) queued for this reader.
+    Delegates per-record handling to the public `process_record` seam so
+    the MCP path in scripts/mcp_harvest_session.py and this HTTP path
+    can't drift on dedup / match / unknowns policy.
     """
     new_count = 0
-    seen_in_run: set[str] = set()  # intra-run dedup (two readers seeing same msg)
+    seen_in_run: set[str] = set()
 
     for record in reader.harvest(since=since, until=until):
         summary.records_seen += 1
         ch = record.get("channel") or reader_name
         summary.records_by_channel[ch] = summary.records_by_channel.get(ch, 0) + 1
 
-        iid = record.get("interactionId")
-        if not iid:
-            continue
-        if iid in seen_in_run:
-            continue
-        seen_in_run.add(iid)
-
-        ts_raw = record.get("timestamp")
-        if not ts_raw:
-            continue
-        ts = _parse_ts(ts_raw)
-        if ts is None:
-            continue
-
-        partition = _partition_path(ts)
-        if partition not in existing_ids_cache:
-            existing_ids_cache[partition] = _existing_ids(partition)
-        if iid in existing_ids_cache[partition]:
-            # Already persisted from a prior run — dedup and move on.
-            continue
-
-        # Contact match — mutate the record in place so the stored row
-        # carries contactId.
-        resolved = matcher.match(record)
-        if resolved:
-            record["contactId"] = resolved
-            summary.records_matched += 1
-        else:
-            record["contactId"] = None
-            summary.records_unmatched += 1
-            _append_unknown(record)
-
-        records_by_partition.setdefault(partition, []).append(record)
-        existing_ids_cache[partition].add(iid)
-        new_count += 1
-        summary.records_new += 1
+        outcome = process_record(
+            record,
+            matcher=matcher,
+            records_by_partition=records_by_partition,
+            existing_ids_cache=existing_ids_cache,
+            seen_in_run=seen_in_run,
+        )
+        if outcome == "new":
+            new_count += 1
+            summary.records_new += 1
+            if record.get("contactId"):
+                summary.records_matched += 1
+            else:
+                summary.records_unmatched += 1
 
     return new_count
 
@@ -601,17 +682,29 @@ def score_interactions_cli(
     kpis = derive_all_kpis(records_by_contact)
     save_kpis_to_json(kpis, out_path)
 
+    upload_status = "skipped"
+    upload_error: Optional[str] = None
     if upload_to_gcs:
         try:
-            upload_file_to_gcs(out_path, "data/interactions/contact_kpis.json", "harvester")
-        except Exception as e:
-            logger.warning("score-interactions: GCS upload failed: %s", e)
+            ok = upload_file_to_gcs(out_path, "data/interactions/contact_kpis.json", "harvester")
+            upload_status = "ok" if ok else "transient_error"
+            if not ok:
+                upload_error = "transient upload error — retry next run"
+        except GCSUploadAuthError as e:
+            logger.error(
+                "score-interactions: GCS upload AUTH FAILURE — operator must "
+                "run `gcloud auth application-default login`: %s", e,
+            )
+            upload_status = "auth_error"
+            upload_error = str(e)
 
     return {
         "total_records": total,
         "unmatched_records": unmatched,
         "contacts_scored": len(kpis),
         "out_path": str(out_path),
+        "upload_status": upload_status,
+        "upload_error": upload_error,
     }
 
 

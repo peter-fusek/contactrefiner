@@ -266,22 +266,84 @@ def safe_get_nested(d: dict, *keys, default=None):
     return current
 
 
-def upload_file_to_gcs(local_path, blob_name: str, logger_prefix: str) -> None:
-    """Upload a local file to GCS (no-op in cloud mode where GCS FUSE handles sync)."""
+class GCSUploadAuthError(Exception):
+    """Auth-related GCS upload failure — credentials missing, expired, or
+    denied. Caller should surface this to the operator instead of treating
+    it as a transient blip, because subsequent retries will fail identically
+    until the human fixes their ADC / SA key."""
+
+
+def upload_file_to_gcs(local_path, blob_name: str, logger_prefix: str) -> bool:
+    """Upload a local file to GCS.
+
+    Returns True on successful upload, False on transient failure (network,
+    quota). Raises GCSUploadAuthError on auth failure — these are not
+    transient: they persist until the operator re-authenticates.
+
+    No-op in cloud mode (returns True) where GCS FUSE handles sync.
+
+    The previous version of this function swallowed every exception as
+    "non-fatal" via `log.warning`. That silently desynced GCS from local
+    JSONL partitions — subsequent runs' local-only dedup then hid the
+    missing records forever from Cloud Run scoring. Callers now get a
+    structured signal:
+      - True  → uploaded
+      - False → transient; caller may retry or queue for later
+      - raise → auth; operator must act
+    """
     import logging
     from config import ENVIRONMENT
     log = logging.getLogger("contacts-refiner")
     if ENVIRONMENT == "cloud":
-        return
+        return True
+
+    import os
     try:
-        import os
-        from google.cloud import storage
-        creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "/tmp/dashboard-reader-key.json")
-        if os.path.exists(creds_path):
-            os.environ.setdefault("GOOGLE_APPLICATION_CREDENTIALS", creds_path)
+        from google.cloud import storage  # type: ignore[import-untyped]
+    except ImportError as e:
+        # Package not installed — treat as auth-class since it's a setup
+        # failure the caller needs to surface, not a retryable blip.
+        raise GCSUploadAuthError(
+            f"google-cloud-storage not installed: {e}. "
+            f"Run: uv pip install 'google-cloud-storage>=2.19.0'"
+        ) from e
+
+    # If a Service Account key is explicitly pointed at, use it. Otherwise
+    # fall through to Application Default Credentials from `gcloud auth
+    # application-default login`.
+    creds_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+    if not creds_path:
+        legacy_sa = "/tmp/dashboard-reader-key.json"
+        if os.path.exists(legacy_sa):
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = legacy_sa
+
+    try:
         client = storage.Client()
         bucket = client.bucket(os.getenv("GCS_BUCKET", "contacts-refiner-data"))
         bucket.blob(blob_name).upload_from_filename(str(local_path))
-        log.info(f"{logger_prefix}: Uploaded to GCS")
-    except Exception as e:
-        log.warning(f"{logger_prefix}: GCS upload failed (non-fatal): {e}")
+    except Exception as e:  # noqa: BLE001 — we re-raise or return per type
+        # Surface the underlying exception type names rather than using
+        # isinstance against specific google.* types — the google-cloud-*
+        # SDKs move exception classes between minor versions and a strict
+        # import chain would break on future upgrades. Name-matching a known
+        # set is fragile but acceptable for classification; anything
+        # unrecognized falls through as "transient" rather than silent.
+        cls = type(e).__name__
+        msg = str(e)
+        auth_signatures = (
+            "DefaultCredentialsError",
+            "Forbidden",
+            "Unauthorized",
+            "RefreshError",
+            "Reauthentication",
+            "ReauthFailError",
+            "ReauthUnattendedError",
+        )
+        if cls in auth_signatures or "credentials" in msg.lower() or "authentication" in msg.lower():
+            log.error(f"{logger_prefix}: GCS upload AUTH FAILURE ({cls}): {msg}")
+            raise GCSUploadAuthError(f"{cls}: {msg}") from e
+        log.warning(f"{logger_prefix}: GCS upload failed (transient {cls}): {msg}")
+        return False
+
+    log.info(f"{logger_prefix}: Uploaded to GCS")
+    return True

@@ -83,6 +83,14 @@ def load_contact_kpis(path: Optional[Path] = None) -> dict[str, ContactKPI]:
     score_beeper=0 for every contact. Harvester hasn't run yet → no
     regression; harvester ran but crashed mid-write → we ignore the
     broken file rather than scoring on half-baked data.
+
+    Logs a warning if the file is older than 14 days — this is the
+    dead-man-switch for the Option-D session-start harvest pattern. The
+    monthly Cloud Run pipeline reads this file, so a stale file means
+    FollowUp scoring is running on old omnichannel context without
+    anyone noticing. Surface-only (non-blocking) — scoring still runs,
+    just loudly flags that the operator hasn't opened a session
+    recently.
     """
     if path is None:
         path = FOLLOWUP_BEEPER_KPI_FILE
@@ -90,10 +98,30 @@ def load_contact_kpis(path: Optional[Path] = None) -> dict[str, ContactKPI]:
         kpis = load_kpis_from_json(path)
         if kpis:
             logger.info(f"FollowUp: loaded {len(kpis)} ContactKPI records from {path}")
+            _warn_if_stale(path)
         return kpis
     except Exception as e:
         logger.warning(f"FollowUp: failed to load contact_kpis.json: {e}")
         return {}
+
+
+def _warn_if_stale(path: Path, *, max_age_days: int = 14) -> None:
+    """Emit an observable "harvest stale" signal when contact_kpis.json
+    hasn't been refreshed recently. No-op if the file is fresh or missing."""
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        return
+    age_seconds = datetime.now(timezone.utc).timestamp() - mtime
+    age_days = age_seconds / 86400.0
+    if age_days > max_age_days:
+        logger.warning(
+            "FollowUp: contact_kpis.json is %.1f days old (threshold %dd). "
+            "Omnichannel scoring inputs may be stale — harvester hasn't run "
+            "recently. Start a Claude Code session on contactrefiner to "
+            "refresh (or check data/harvest_runs.json for last-run details).",
+            age_days, max_age_days,
+        )
 
 
 _BEEPER_WEIGHTS = BeeperWeights(

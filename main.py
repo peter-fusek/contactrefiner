@@ -1490,7 +1490,14 @@ def cmd_score_interactions() -> int:
     print(f"  Unmatched:        {result['unmatched_records']}")
     print(f"  Contacts scored:  {result['contacts_scored']}")
     print(f"  Output:           {result['out_path']}")
+    status = result.get("upload_status", "unknown")
+    print(f"  GCS upload:       {status}")
+    if result.get("upload_error"):
+        print(f"  upload error:     {result['upload_error']}")
     print()
+    if status == "auth_error":
+        print("!! Re-authenticate: gcloud auth application-default login")
+        return result["contacts_scored"]
     print("✅ Done.")
     return result["contacts_scored"]
 
