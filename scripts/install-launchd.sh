@@ -87,8 +87,16 @@ if [[ "${MODE}" == "uninstall" ]]; then
       log "  ${agent} not installed — skipping"
     fi
   done
-  log "Uninstall complete. newsyslog entry left in place at ${NEWSYSLOG_FILE}"
-  log "  (remove manually if desired — requires sudo)"
+  # Clean up the staged newsyslog template. The system-owned config at
+  # /etc/newsyslog.d needs sudo, so we only hint at it; the staging file
+  # under $LOG_DIR is ours to remove.
+  NS_STAGING_LEGACY="${LOG_DIR}/newsyslog.d-contactrefiner-harvester.conf"
+  if [[ -f "${NS_STAGING_LEGACY}" ]]; then
+    rm -f "${NS_STAGING_LEGACY}"
+    log "✓ removed staged newsyslog template"
+  fi
+  log "Uninstall complete. newsyslog entry (if installed) left at ${NEWSYSLOG_FILE}"
+  log "  to fully remove the rotation rule: sudo rm ${NEWSYSLOG_FILE}"
   exit 0
 fi
 

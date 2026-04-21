@@ -498,6 +498,34 @@ export async function saveLeadSignalsState(state: LeadSignalsState): Promise<voi
   clearCache()
 }
 
+// --- Harvest runs ---
+
+export interface HarvestRun {
+  timestamp: string
+  mode: string
+  chats: number
+  records_new: number
+  records_matched: number
+  records_unmatched: number
+  partitions_written?: Record<string, number>
+  upload_status?: 'ok' | 'transient_error' | 'auth_error' | 'skipped'
+  errors?: string[]
+  sourceVersion?: string
+}
+
+export interface HarvestRunsFile {
+  schema_version: number
+  updated?: string
+  runs: HarvestRun[]
+}
+
+export async function getHarvestRuns(): Promise<HarvestRunsFile> {
+  return cachedRead('harvest_runs', async () => {
+    const data = await readJson<HarvestRunsFile>('data/harvest_runs.json')
+    return data ?? { schema_version: 1, runs: [] }
+  })
+}
+
 // --- Cache Control ---
 
 /** Clear all cached data to force fresh reads from GCS */

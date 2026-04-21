@@ -43,7 +43,7 @@ from pathlib import Path
 from typing import Callable, Iterable, Iterator, Literal, Optional, Protocol
 
 from config import DATA_DIR
-from utils import upload_file_to_gcs
+from utils import GCSUploadAuthError, upload_file_to_gcs
 from harvester.contact_matcher import ContactMatcher, MatchCache, log_phone_parse_summary
 
 logger = logging.getLogger("contacts-refiner.harvester.pipeline")
@@ -226,6 +226,19 @@ def _append_unknown(record: dict, path: Optional[Path] = None) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
+def _mark_pending_upload(partition: Path) -> None:
+    """Drop a sentinel file when a GCS upload failed, so the next run can
+    either retry it or surface to the dashboard that GCS is stale.
+
+    Kept simple: just an empty file per failed partition. Absence = nothing
+    pending. Caller shouldn't rely on this for recovery — it's a signal to
+    the operator that local and GCS state have diverged.
+    """
+    sentinel = INTERACTIONS_DIR / f".pending_upload_{partition.name}"
+    sentinel.parent.mkdir(parents=True, exist_ok=True)
+    sentinel.touch(exist_ok=True)
 
 
 # Public re-exports — see block comment at top of section.
@@ -475,10 +488,29 @@ def run_harvest(
         if upload_to_gcs:
             blob = f"data/interactions/{partition.name}"
             try:
-                upload_file_to_gcs(partition, blob, "harvester")
-            except Exception as e:
-                logger.warning("Harvester: GCS upload failed for %s: %s", partition.name, e)
-                summary.errors.append(f"gcs_upload[{partition.name}]: {e}")
+                ok = upload_file_to_gcs(partition, blob, "harvester")
+                if ok is False:
+                    # Transient error — record but don't escalate. Next run
+                    # dedups against local, so as long as the NEXT upload
+                    # succeeds we catch up. Sentinel file prevents silent
+                    # indefinite desync if transient errors persist.
+                    _mark_pending_upload(partition)
+                    summary.errors.append(
+                        f"gcs_upload[{partition.name}]: transient (see data/interactions/.pending_upload)"
+                    )
+            except GCSUploadAuthError as e:
+                # Auth is operator-actionable. Log loud, mark the error
+                # distinctly so callers (main.py, launchd, dashboard) know
+                # re-auth is required — not just a retry.
+                logger.error(
+                    "Harvester: GCS upload AUTH FAILURE for %s — operator must "
+                    "run `gcloud auth application-default login`: %s",
+                    partition.name, e,
+                )
+                _mark_pending_upload(partition)
+                summary.errors.append(
+                    f"gcs_upload_auth[{partition.name}]: {e}"
+                )
 
     matcher.save_cache(MATCH_CACHE_FILE)
     cursors.save()
@@ -650,17 +682,29 @@ def score_interactions_cli(
     kpis = derive_all_kpis(records_by_contact)
     save_kpis_to_json(kpis, out_path)
 
+    upload_status = "skipped"
+    upload_error: Optional[str] = None
     if upload_to_gcs:
         try:
-            upload_file_to_gcs(out_path, "data/interactions/contact_kpis.json", "harvester")
-        except Exception as e:
-            logger.warning("score-interactions: GCS upload failed: %s", e)
+            ok = upload_file_to_gcs(out_path, "data/interactions/contact_kpis.json", "harvester")
+            upload_status = "ok" if ok else "transient_error"
+            if not ok:
+                upload_error = "transient upload error — retry next run"
+        except GCSUploadAuthError as e:
+            logger.error(
+                "score-interactions: GCS upload AUTH FAILURE — operator must "
+                "run `gcloud auth application-default login`: %s", e,
+            )
+            upload_status = "auth_error"
+            upload_error = str(e)
 
     return {
         "total_records": total,
         "unmatched_records": unmatched,
         "contacts_scored": len(kpis),
         "out_path": str(out_path),
+        "upload_status": upload_status,
+        "upload_error": upload_error,
     }
 
 

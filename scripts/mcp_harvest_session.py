@@ -50,7 +50,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from config import DATA_DIR  # noqa: E402
 from harvester.beeper_client import (  # noqa: E402
     NETWORK_CHANNEL_MAP,
     BeeperClient,
@@ -68,7 +67,7 @@ from harvester.pipeline import (  # noqa: E402
     is_harvester_paused,
     process_record,
 )
-from utils import upload_file_to_gcs  # noqa: E402
+from utils import GCSUploadAuthError, upload_file_to_gcs  # noqa: E402
 
 
 def _load_contacts() -> list[dict]:
@@ -174,13 +173,39 @@ def mcp_message_to_record(
     return record
 
 
-def harvest(payload: dict, *, dry_run: bool, upload: bool) -> dict:
+def harvest(
+    payload: dict, *, dry_run: bool, upload: bool, allow_empty: bool = False,
+) -> dict:
     if is_harvester_paused():
         print("⏸  pipeline_paused.json is set — exiting without writes")
         return {"paused": True}
 
+    # Payload contract guards — moves "skip if Beeper off" from the prose
+    # CLAUDE.md instruction to an enforced check. A rushing agent or a
+    # future automation that bypasses the CLAUDE.md block still can't
+    # silently produce a zero-record run that gets mistaken for "no new
+    # traffic".
+    if not payload.get("beeperAccountsOk", False):
+        raise SystemExit(
+            "error: payload missing `beeperAccountsOk: true`. The operator\n"
+            "       must call mcp__beeper__get_accounts first and include\n"
+            "       `beeperAccountsOk: true` in the payload to confirm\n"
+            "       Beeper Desktop is running and reachable. Without this\n"
+            "       guard, 'Beeper off' silently becomes an empty harvest."
+        )
+
+    chats = payload.get("chats", [])
+    if not chats and not allow_empty:
+        raise SystemExit(
+            "error: payload contains zero chats. Use --allow-empty to run\n"
+            "       anyway (e.g. to exercise the pipeline with no new data),\n"
+            "       or check that mcp__beeper__search_chats returned chats\n"
+            "       before building the payload."
+        )
+
     print(f"payload from: {payload.get('source', '?')}  "
-          f"harvested_at: {payload.get('harvestedAt', '?')}")
+          f"harvested_at: {payload.get('harvestedAt', '?')}  "
+          f"chats: {len(chats)}")
 
     contacts = _load_contacts()
     linkedin_signals = _load_linkedin_signals()
@@ -261,32 +286,99 @@ def harvest(payload: dict, *, dry_run: bool, upload: bool) -> dict:
                 print(f"    · … and {len(records) - 5} more")
         return {"dry_run": True, **stats}
 
+    upload_errors: list[str] = []
+    auth_failures: list[str] = []
+
+    def _upload(local_path: Path, blob: str, label: str) -> None:
+        if not upload:
+            return
+        try:
+            ok = upload_file_to_gcs(local_path, blob, "mcp-harvest")
+            if not ok:
+                upload_errors.append(f"{label}: transient")
+                print(f"  ! GCS upload transient failure for {label}")
+        except GCSUploadAuthError as e:
+            auth_failures.append(f"{label}: {e}")
+            print(f"  !! GCS AUTH FAILURE for {label} — run: "
+                  f"gcloud auth application-default login")
+
     written = append_records(records_by_partition)
     for partition, count in written.items():
         print(f"  wrote {count} records to {partition}")
-        if upload:
-            try:
-                upload_file_to_gcs(
-                    partition, f"data/interactions/{partition.name}", "mcp-harvest",
-                )
-            except Exception as e:
-                print(f"  ! GCS upload failed for {partition.name}: {e}")
+        _upload(partition, f"data/interactions/{partition.name}", partition.name)
 
     matcher.save_cache(MATCH_CACHE_FILE)
-    if upload:
-        try:
-            upload_file_to_gcs(
-                MATCH_CACHE_FILE,
-                "data/interactions/interaction_match_cache.json",
-                "mcp-harvest",
-            )
-        except Exception as e:
-            print(f"  ! match_cache upload failed: {e}")
+    _upload(
+        MATCH_CACHE_FILE,
+        "data/interactions/interaction_match_cache.json",
+        "match_cache",
+    )
 
     log_phone_parse_summary()
-    return {"dry_run": False, **stats, "partitions_written": {
-        p.name: c for p, c in written.items()
-    }}
+
+    # Write the per-run log (harvest_runs.json) so the dashboard can show
+    # "last harvest: N hours ago" without having to re-derive it from the
+    # newest record in a partition file.
+    _append_run_log({
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "mode": "mcp-session",
+        "chats": stats["chats"],
+        "records_new": stats.get("matched", 0) + stats.get("unmatched", 0),
+        "records_matched": stats.get("matched", 0),
+        "records_unmatched": stats.get("unmatched", 0),
+        "partitions_written": {p.name: c for p, c in written.items()},
+        "upload_status": (
+            "auth_error" if auth_failures
+            else "transient_error" if upload_errors
+            else "ok" if upload
+            else "skipped"
+        ),
+        "errors": upload_errors + auth_failures,
+        "sourceVersion": "mcp_harvest_session@1",
+    })
+
+    return {
+        "dry_run": False,
+        **stats,
+        "partitions_written": {p.name: c for p, c in written.items()},
+        "upload_errors": upload_errors,
+        "auth_failures": auth_failures,
+    }
+
+
+def _append_run_log(entry: dict) -> None:
+    """Append one entry to data/harvest_runs.json, capped to last 200 runs.
+
+    Used by `/api/harvest-status` on the dashboard to surface freshness.
+    Bounded to keep the file small; older entries roll off. Upload happens
+    at session end so the dashboard reads via GCS.
+    """
+    from config import DATA_DIR as _DATA_DIR
+    log_path = _DATA_DIR / "harvest_runs.json"
+    try:
+        if log_path.exists():
+            data = json.loads(log_path.read_text(encoding="utf-8"))
+        else:
+            data = {"schema_version": 1, "runs": []}
+    except (json.JSONDecodeError, OSError):
+        data = {"schema_version": 1, "runs": []}
+    runs = list(data.get("runs", []))
+    runs.append(entry)
+    # Keep the last 200 runs — plenty of history for dashboard + sparkline,
+    # small enough to stay under a KB or two.
+    runs = runs[-200:]
+    data["runs"] = runs
+    data["updated"] = datetime.now(timezone.utc).isoformat()
+    log_path.write_text(json.dumps(data, indent=2, ensure_ascii=False))
+    # Best-effort upload — don't let a run log failure obscure the harvest
+    # success, but do surface auth errors consistent with the main path.
+    try:
+        upload_file_to_gcs(log_path, "data/harvest_runs.json", "mcp-harvest")
+    except GCSUploadAuthError:
+        # Already surfaced elsewhere; don't double-log.
+        pass
+    except Exception:  # noqa: BLE001
+        pass
 
 
 def main() -> int:
@@ -296,6 +388,9 @@ def main() -> int:
                     help="Normalize + match but don't write or upload")
     ap.add_argument("--no-upload", action="store_true",
                     help="Write locally but skip GCS upload")
+    ap.add_argument("--allow-empty", action="store_true",
+                    help="Proceed even if payload has zero chats "
+                         "(default: hard-fail as a mis-harvest guard)")
     args = ap.parse_args()
 
     payload_path = Path(args.payload)
@@ -313,7 +408,10 @@ def main() -> int:
     print("═══════════════════════════════════════════════════════════════")
 
     result = harvest(
-        payload, dry_run=args.dry_run, upload=not args.no_upload,
+        payload,
+        dry_run=args.dry_run,
+        upload=not args.no_upload,
+        allow_empty=args.allow_empty,
     )
 
     print()
@@ -322,6 +420,12 @@ def main() -> int:
         print(f"  {k}: {v}")
     print()
 
+    # Exit non-zero when auth errors occurred — operator must re-auth before
+    # the next run, and a zero exit would hide this from launchd/agents/etc.
+    if result.get("auth_failures"):
+        print("!! Auth failures surfaced — re-run "
+              "`gcloud auth application-default login` before next harvest.")
+        return 2
     return 0
 
 
